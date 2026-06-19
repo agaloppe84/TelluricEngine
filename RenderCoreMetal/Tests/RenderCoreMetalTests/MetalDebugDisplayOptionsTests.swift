@@ -15,7 +15,9 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
             colorMode: .surface,
             isWireframeEnabled: true,
             showsBounds: true,
-            normals: MetalDebugNormalsConfiguration(isEnabled: true, stride: 4, length: 3)
+            normals: MetalDebugNormalsConfiguration(isEnabled: true, stride: 4, length: 3),
+            grid: MetalDebugGridConfiguration(isEnabled: true),
+            pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false)
         )
 
         XCTAssertEqual(options.colorMode, .surface)
@@ -23,6 +25,8 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         XCTAssertTrue(options.showsBounds)
         XCTAssertTrue(options.normals.isEnabled)
         XCTAssertEqual(options.normals.stride, 4)
+        XCTAssertTrue(options.grid.isEnabled)
+        XCTAssertFalse(options.pickedPointMarker.isEnabled)
         XCTAssertNotEqual(options.stableDebugID, MetalDebugTerrainDisplayOptions.default.stableDebugID)
     }
 

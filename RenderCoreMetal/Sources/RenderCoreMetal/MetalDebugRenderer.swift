@@ -20,6 +20,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     private var displayOptions = MetalDebugTerrainDisplayOptions.default
     private var boundsLineBuffers: MetalDebugLineBuffers?
     private var normalLineBuffers: MetalDebugLineBuffers?
+    private var gridLineBuffers: MetalDebugLineBuffers?
+    private var pickedPointLineBuffers: MetalDebugLineBuffers?
     private var frameStats = MetalDebugFrameStats.zero
     private var frameIndex: UInt64 = 0
     private var lastFrameTimestamp: CFTimeInterval?
@@ -104,6 +106,18 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         _ descriptors: [MetalTerrainMeshDescriptor],
         displayOptions: MetalDebugTerrainDisplayOptions
     ) throws {
+        try updateMeshes(
+            descriptors,
+            displayOptions: displayOptions,
+            pickedPoint: nil
+        )
+    }
+
+    public func updateMeshes(
+        _ descriptors: [MetalTerrainMeshDescriptor],
+        displayOptions: MetalDebugTerrainDisplayOptions,
+        pickedPoint: MetalDebugWorldPoint?
+    ) throws {
         let effectiveDescriptors = descriptors.map { descriptor in
             MetalTerrainMeshDescriptor(
                 meshPayload: descriptor.meshPayload,
@@ -133,6 +147,24 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 debugName: "telluric-debug-normal-lines"
             )
             : nil
+        gridLineBuffers = displayOptions.grid.isEnabled
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makeGridLineVertices(
+                    descriptors: effectiveDescriptors,
+                    configuration: displayOptions.grid
+                ),
+                debugName: "telluric-debug-grid-lines"
+            )
+            : nil
+        pickedPointLineBuffers = displayOptions.pickedPointMarker.isEnabled
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makePickedPointMarkerLineVertices(
+                    point: pickedPoint,
+                    configuration: displayOptions.pickedPointMarker
+                ),
+                debugName: "telluric-debug-picked-point-lines"
+            )
+            : nil
     }
 
     public func updateCamera(_ state: MetalDebugCameraState) {
@@ -144,6 +176,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         camera = MetalDebugCamera()
         boundsLineBuffers = nil
         normalLineBuffers = nil
+        gridLineBuffers = nil
+        pickedPointLineBuffers = nil
         frameStats = MetalDebugFrameStats.zero
         currentFrameStats = .zero
     }
@@ -191,6 +225,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         encoder.setTriangleFillMode(.fill)
         drawLineBuffers(boundsLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(normalLineBuffers, encoder: encoder, uniforms: &uniforms)
+        drawLineBuffers(gridLineBuffers, encoder: encoder, uniforms: &uniforms)
+        drawLineBuffers(pickedPointLineBuffers, encoder: encoder, uniforms: &uniforms)
 
         encoder.endEncoding()
         commandBuffer.present(drawable)
@@ -320,7 +356,10 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             renderedMeshCount: meshBuffers.count,
             renderedVertexCount: meshBuffers.reduce(0) { $0 + $1.vertexCount },
             renderedIndexCount: meshBuffers.reduce(0) { $0 + $1.indexCount },
-            renderedLineVertexCount: (boundsLineBuffers?.vertexCount ?? 0) + (normalLineBuffers?.vertexCount ?? 0),
+            renderedLineVertexCount: (boundsLineBuffers?.vertexCount ?? 0)
+                + (normalLineBuffers?.vertexCount ?? 0)
+                + (gridLineBuffers?.vertexCount ?? 0)
+                + (pickedPointLineBuffers?.vertexCount ?? 0),
             frameIndex: frameIndex
         )
         currentFrameStats = frameStats

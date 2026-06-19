@@ -22,6 +22,12 @@ struct TelluricMetalDebugToolbarView: View {
                     .toggleStyle(.checkbox)
                 Toggle("Normals", isOn: $model.showsNormals)
                     .toggleStyle(.checkbox)
+                Toggle("Grid", isOn: $model.showsGrid)
+                    .toggleStyle(.checkbox)
+                Toggle("Pick point", isOn: $model.showsPickedPoint)
+                    .toggleStyle(.checkbox)
+                Toggle("Picking", isOn: $model.isViewportPickingEnabled)
+                    .toggleStyle(.checkbox)
             }
 
             HStack(spacing: 12) {

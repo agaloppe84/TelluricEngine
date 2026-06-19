@@ -18,9 +18,16 @@ struct TelluricMetalDebugView: View {
                         uploadHash: model.debugMeshUploadHash,
                         displayOptions: model.debugDisplayOptions,
                         cameraState: model.debugCameraState,
+                        pickedPoint: model.pickedWorldPoint,
+                        isViewportPickingEnabled: model.isViewportPickingEnabled,
                         statsTick: timeline.date,
                         renderErrorMessage: $renderErrorMessage,
-                        frameStats: $frameStats
+                        frameStats: $frameStats,
+                        onPickResult: model.applyViewportPick,
+                        onHoverResult: model.applyViewportHover,
+                        onScrollZoom: model.zoomDebugCameraFromScroll,
+                        onOrbitDrag: model.orbitDebugCameraFromDrag,
+                        onPanDrag: model.panDebugCameraFromDrag
                     )
                 }
                 .frame(minHeight: 280)

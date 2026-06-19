@@ -18,8 +18,11 @@ struct TelluricMetalDebugOverlayView: View {
             row("Wire", model.isWireframeEnabled ? "on" : "off")
             row("Bounds", model.showsBounds ? "on" : "off")
             row("Normals", model.showsNormals ? "on" : "off")
+            row("Grid", model.showsGrid ? "on" : "off")
+            row("Picking", model.isViewportPickingEnabled ? "on" : "off")
             row("Camera", cameraLabel)
             row("Selected", model.selectedChunkLabel)
+            row("Inspect", model.terrainInspectionState?.statusLabel ?? "none")
         }
         .font(.caption2.monospacedDigit())
         .padding(8)

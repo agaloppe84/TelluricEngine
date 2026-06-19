@@ -8,9 +8,16 @@ struct TelluricMetalViewRepresentable: NSViewRepresentable {
     let uploadHash: UInt64
     let displayOptions: MetalDebugTerrainDisplayOptions
     let cameraState: MetalDebugCameraState
+    let pickedPoint: MetalDebugWorldPoint?
+    let isViewportPickingEnabled: Bool
     let statsTick: Date
     @Binding var renderErrorMessage: String?
     @Binding var frameStats: MetalDebugFrameStats
+    let onPickResult: (MetalDebugPickingResult) -> Void
+    let onHoverResult: (MetalDebugPickingResult) -> Void
+    let onScrollZoom: (Float) -> Void
+    let onOrbitDrag: (Float, Float) -> Void
+    let onPanDrag: (Float, Float) -> Void
 
     func makeCoordinator() -> TelluricMetalDebugCoordinator {
         TelluricMetalDebugCoordinator()
@@ -27,8 +34,15 @@ struct TelluricMetalViewRepresentable: NSViewRepresentable {
             uploadHash: uploadHash,
             displayOptions: displayOptions,
             cameraState: cameraState,
+            pickedPoint: pickedPoint,
+            isViewportPickingEnabled: isViewportPickingEnabled,
             renderErrorMessage: $renderErrorMessage,
-            frameStats: $frameStats
+            frameStats: $frameStats,
+            onPickResult: onPickResult,
+            onHoverResult: onHoverResult,
+            onScrollZoom: onScrollZoom,
+            onOrbitDrag: onOrbitDrag,
+            onPanDrag: onPanDrag
         )
     }
 }

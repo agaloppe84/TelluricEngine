@@ -76,9 +76,13 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     @Published var isWireframeEnabled: Bool
     @Published var showsBounds: Bool
     @Published var showsNormals: Bool
+    @Published var showsGrid: Bool
+    @Published var showsPickedPoint: Bool
+    @Published var isViewportPickingEnabled: Bool
     @Published var debugNormalLength: Float
     @Published private(set) var debugCameraState: MetalDebugCameraState
     @Published private(set) var selectedChunkCoord: WorldChunkCoord?
+    @Published private(set) var terrainInspectionState: TelluricTerrainInspectionState?
 
     let generatorVersion: TerrainGeneratorVersion
     let layout: TerrainChunkLayout
@@ -115,6 +119,9 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         self.isWireframeEnabled = false
         self.showsBounds = false
         self.showsNormals = false
+        self.showsGrid = false
+        self.showsPickedPoint = true
+        self.isViewportPickingEnabled = true
         self.debugNormalLength = 2.0
         self.debugCameraState = cameraController.reset(bounds: nil)
 
@@ -170,6 +177,12 @@ final class TelluricDebugRuntimeModel: ObservableObject {
                 isEnabled: showsNormals,
                 stride: 8,
                 length: debugNormalLength
+            ),
+            grid: MetalDebugGridConfiguration(
+                isEnabled: showsGrid
+            ),
+            pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(
+                isEnabled: showsPickedPoint
             )
         )
     }
@@ -193,6 +206,10 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             return "none"
         }
         return "(\(selectedChunkCoord.x), \(selectedChunkCoord.z))"
+    }
+
+    var pickedWorldPoint: MetalDebugWorldPoint? {
+        terrainInspectionState?.pickedWorldPoint
     }
 
     var debugTerrainMeshDescriptors: [MetalTerrainMeshDescriptor] {
@@ -240,6 +257,7 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         var state = StableHasher.combine(debugTerrainMeshHash, debugDisplayOptions.stableDebugID)
         state = StableHasher.combine(state, selectedChunkCoord?.stableHash ?? 0)
         state = StableHasher.combine(state, selectedChunkCoord == nil ? 0 : 1)
+        state = StableHasher.combine(state, terrainInspectionState?.stableDebugID ?? 0)
         return state
     }
 
@@ -322,16 +340,23 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     func reset() {
         centerChunkCoord = WorldChunkCoord(x: 0, z: 0)
         selectedChunkCoord = nil
+        terrainInspectionState = nil
         cache = InMemoryWorldCache()
         rebuild(fitCamera: true)
     }
 
     func selectChunk(_ coord: WorldChunkCoord) {
         selectedChunkCoord = coord
+        terrainInspectionState = TelluricTerrainInspectionState(
+            source: .grid,
+            result: nil,
+            selectedCoord: coord
+        )
     }
 
     func clearSelection() {
         selectedChunkCoord = nil
+        terrainInspectionState = nil
     }
 
     func setDebugTerrainColorMode(_ colorMode: MetalDebugTerrainColorMode) {
@@ -385,6 +410,43 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     func fitDebugCameraToTerrain() {
         let bounds = debugTerrainMeshDescriptors.map(\.meshPayload.bounds)
         debugCameraState = cameraController.reset(bounds: bounds.isEmpty ? nil : bounds)
+    }
+
+    func applyViewportPick(_ result: MetalDebugPickingResult) {
+        terrainInspectionState = TelluricTerrainInspectionState(
+            source: .click,
+            result: result,
+            selectedCoord: result.hit?.chunkCoord ?? selectedChunkCoord
+        )
+
+        if let coord = result.hit?.chunkCoord {
+            selectedChunkCoord = coord
+        }
+    }
+
+    func applyViewportHover(_ result: MetalDebugPickingResult) {
+        terrainInspectionState = TelluricTerrainInspectionState(
+            source: .hover,
+            result: result,
+            selectedCoord: selectedChunkCoord
+        )
+    }
+
+    func zoomDebugCameraFromScroll(deltaY: Float) {
+        debugCameraState = cameraController.zoom(debugCameraState, delta: -deltaY * 0.035)
+    }
+
+    func orbitDebugCameraFromDrag(deltaX: Float, deltaY: Float) {
+        debugCameraState = cameraController.orbit(
+            debugCameraState,
+            deltaYaw: deltaX * 0.008,
+            deltaPitch: -deltaY * 0.006
+        )
+    }
+
+    func panDebugCameraFromDrag(deltaX: Float, deltaY: Float) {
+        let scale = max(debugCameraState.orthographicScale, 1) * 0.004
+        panDebugCamera(dx: -deltaX * scale, dz: deltaY * scale)
     }
 
     private func move(dx: Int, dz: Int) {

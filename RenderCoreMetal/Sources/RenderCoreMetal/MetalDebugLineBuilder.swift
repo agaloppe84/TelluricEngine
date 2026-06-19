@@ -81,5 +81,95 @@ public enum MetalDebugLineBuilder {
         return lines
     }
 
+    public static func makeGridLineVertices(
+        descriptors: [MetalTerrainMeshDescriptor],
+        configuration: MetalDebugGridConfiguration
+    ) -> [MetalDebugLineVertex] {
+        guard configuration.isEnabled,
+              let first = descriptors.first?.meshPayload.bounds
+        else {
+            return []
+        }
+
+        var minX = first.min.x
+        var maxX = first.max.x
+        var minZ = first.min.z
+        var maxZ = first.max.z
+        var maxY = first.max.y
+        var xBoundaries = [first.min.x, first.max.x]
+        var zBoundaries = [first.min.z, first.max.z]
+
+        for descriptor in descriptors.dropFirst() {
+            let bounds = descriptor.meshPayload.bounds
+            minX = min(minX, bounds.min.x)
+            maxX = max(maxX, bounds.max.x)
+            minZ = min(minZ, bounds.min.z)
+            maxZ = max(maxZ, bounds.max.z)
+            maxY = max(maxY, bounds.max.y)
+            xBoundaries.append(bounds.min.x)
+            xBoundaries.append(bounds.max.x)
+            zBoundaries.append(bounds.min.z)
+            zBoundaries.append(bounds.max.z)
+        }
+
+        let y = maxY + configuration.heightOffset
+        let uniqueX = stableUniqueFloats(xBoundaries)
+        let uniqueZ = stableUniqueFloats(zBoundaries)
+        var lines: [MetalDebugLineVertex] = []
+
+        for x in uniqueX {
+            lines.append(MetalDebugLineVertex(position: SIMD3<Float>(x, y, minZ), color: configuration.color))
+            lines.append(MetalDebugLineVertex(position: SIMD3<Float>(x, y, maxZ), color: configuration.color))
+        }
+
+        for z in uniqueZ {
+            lines.append(MetalDebugLineVertex(position: SIMD3<Float>(minX, y, z), color: configuration.color))
+            lines.append(MetalDebugLineVertex(position: SIMD3<Float>(maxX, y, z), color: configuration.color))
+        }
+
+        return lines
+    }
+
+    public static func makePickedPointMarkerLineVertices(
+        point: MetalDebugWorldPoint?,
+        configuration: MetalDebugPickedPointMarkerConfiguration
+    ) -> [MetalDebugLineVertex] {
+        guard configuration.isEnabled, let point else {
+            return []
+        }
+
+        let center = point.position
+        let size = configuration.size
+        let color = configuration.color
+
+        let endpoints = [
+            (center + SIMD3<Float>(-size, 0, 0), center + SIMD3<Float>(size, 0, 0)),
+            (center + SIMD3<Float>(0, -size, 0), center + SIMD3<Float>(0, size, 0)),
+            (center + SIMD3<Float>(0, 0, -size), center + SIMD3<Float>(0, 0, size))
+        ]
+
+        return endpoints.flatMap { start, end in
+            [
+                MetalDebugLineVertex(position: start, color: color),
+                MetalDebugLineVertex(position: end, color: color)
+            ]
+        }
+    }
+
+    private static func stableUniqueFloats(_ values: [Float]) -> [Float] {
+        var seen = Set<UInt32>()
+        return values
+            .filter(\.isFinite)
+            .sorted {
+                if $0 != $1 {
+                    return $0 < $1
+                }
+                return $0.bitPattern < $1.bitPattern
+            }
+            .filter { value in
+                seen.insert(value.bitPattern).inserted
+            }
+    }
+
     private static let selectedBoundsColor = SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
 }
