@@ -30,6 +30,7 @@ struct TelluricSnapshotStatsView: View {
             statRow("Active", "\(model.activeRecords)")
             statRow("Resident", "\(model.residentRecords)")
             statRow("Meshed", "\(model.meshedRecords)")
+            statRow("Metal meshes", "\(model.debugTerrainMeshCount)")
             statRow("Sample only", "\(model.sampleOnlyRecords)")
             statRow("Render candidates", "\(model.snapshot?.stats.renderCandidateRecords ?? 0)")
             statRow("Vertices", "\(model.snapshot?.stats.estimatedVertexCount ?? 0)")

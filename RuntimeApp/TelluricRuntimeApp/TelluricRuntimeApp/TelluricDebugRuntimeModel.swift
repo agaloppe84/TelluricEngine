@@ -1,5 +1,6 @@
 import Combine
 import EngineCore
+import RenderCoreMetal
 import SwiftUI
 
 struct TelluricDebugChunkCell: Identifiable, Hashable {
@@ -142,6 +143,44 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     var activeRecords: Int {
         snapshot?.stats.activeRecords ?? 0
+    }
+
+    var debugTerrainMeshDescriptors: [MetalTerrainMeshDescriptor] {
+        (snapshot?.records ?? []).compactMap { record in
+            guard let meshPayload = record.meshPayload else {
+                return nil
+            }
+
+            return MetalTerrainMeshDescriptor(
+                meshPayload: meshPayload,
+                chunkID: record.chunkID,
+                lifecycleState: record.lifecycleState,
+                payloadState: record.payloadState,
+                debugName: "chunk-\(record.chunkCoord.x)-\(record.chunkCoord.z)"
+            )
+        }
+    }
+
+    var debugTerrainMeshCount: Int {
+        debugTerrainMeshDescriptors.count
+    }
+
+    var debugTerrainMeshHash: UInt64 {
+        let records = snapshot?.records ?? []
+        var state = StableHasher.hash(seed: 0x7E11_571C_D3B6_0001, UInt64(records.count))
+
+        for record in records {
+            guard let meshPayload = record.meshPayload else {
+                continue
+            }
+
+            state = StableHasher.combine(state, record.chunkID.stableHash)
+            state = StableHasher.combine(state, record.lifecycleState.stableHash)
+            state = StableHasher.combine(state, record.payloadState.stableHash)
+            state = StableHasher.combine(state, meshPayload.stableHash)
+        }
+
+        return StableHasher.combine(state, UInt64(debugTerrainMeshCount))
     }
 
     var gridRows: [TelluricDebugChunkGridRow] {

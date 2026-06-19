@@ -13,14 +13,25 @@ let package = Package(
             targets: ["RenderCoreMetal"]
         )
     ],
+    dependencies: [
+        .package(path: "../EngineCore")
+    ],
     targets: [
         .target(
-            name: "RenderCoreMetal"
+            name: "RenderCoreMetal",
+            dependencies: [
+                .product(name: "EngineCore", package: "EngineCore")
+            ],
+            resources: [
+                .process("Shaders")
+            ]
         ),
         .testTarget(
             name: "RenderCoreMetalTests",
-            dependencies: ["RenderCoreMetal"]
+            dependencies: [
+                "RenderCoreMetal",
+                .product(name: "EngineCore", package: "EngineCore")
+            ]
         )
     ]
 )
-
