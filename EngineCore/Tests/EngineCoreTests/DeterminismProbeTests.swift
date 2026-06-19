@@ -51,6 +51,8 @@ final class DeterminismProbeTests: XCTestCase {
             "import SceneKit",
             "import SpriteKit",
             "import GameController",
+            "import GameplayKit",
+            "import simd",
             "import AVFoundation"
         ]
 
@@ -80,4 +82,3 @@ final class DeterminismProbeTests: XCTestCase {
         }
     }
 }
-

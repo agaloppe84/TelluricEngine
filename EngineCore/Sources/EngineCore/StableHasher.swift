@@ -35,4 +35,8 @@ public enum StableHasher {
     public static func bits(_ value: UInt32) -> UInt64 {
         UInt64(value)
     }
+
+    public static func bits(_ value: Float) -> UInt64 {
+        UInt64(value.bitPattern)
+    }
 }
