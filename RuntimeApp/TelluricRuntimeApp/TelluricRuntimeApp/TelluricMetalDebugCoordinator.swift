@@ -51,6 +51,7 @@ final class TelluricMetalDebugCoordinator {
         displayOptions: MetalDebugTerrainDisplayOptions,
         cameraState: MetalDebugCameraState,
         pickedPoint: MetalDebugWorldPoint?,
+        probePoint: MetalDebugWorldPoint?,
         isViewportPickingEnabled: Bool,
         renderErrorMessage: Binding<String?>,
         frameStats: Binding<MetalDebugFrameStats>,
@@ -84,7 +85,8 @@ final class TelluricMetalDebugCoordinator {
                 try renderer.updateMeshes(
                     meshDescriptors,
                     displayOptions: displayOptions,
-                    pickedPoint: pickedPoint
+                    pickedPoint: pickedPoint,
+                    probePoint: probePoint
                 )
                 lastUploadHash = uploadHash
             }

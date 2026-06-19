@@ -156,6 +156,34 @@ public enum MetalDebugLineBuilder {
         }
     }
 
+    public static func makeProbeMarkerLineVertices(
+        point: MetalDebugWorldPoint?,
+        configuration: MetalDebugProbeMarkerConfiguration
+    ) -> [MetalDebugLineVertex] {
+        guard configuration.isEnabled, let point else {
+            return []
+        }
+
+        let center = point.position
+        let radius = configuration.radius
+        let height = configuration.height
+        let color = configuration.color
+        let raisedCenter = center + SIMD3<Float>(0, radius, 0)
+
+        let endpoints = [
+            (center, center + SIMD3<Float>(0, height, 0)),
+            (raisedCenter + SIMD3<Float>(-radius, 0, 0), raisedCenter + SIMD3<Float>(radius, 0, 0)),
+            (raisedCenter + SIMD3<Float>(0, 0, -radius), raisedCenter + SIMD3<Float>(0, 0, radius))
+        ]
+
+        return endpoints.flatMap { start, end in
+            [
+                MetalDebugLineVertex(position: start, color: color),
+                MetalDebugLineVertex(position: end, color: color)
+            ]
+        }
+    }
+
     private static func stableUniqueFloats(_ values: [Float]) -> [Float] {
         var seen = Set<UInt32>()
         return values

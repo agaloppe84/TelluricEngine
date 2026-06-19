@@ -17,7 +17,8 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
             showsBounds: true,
             normals: MetalDebugNormalsConfiguration(isEnabled: true, stride: 4, length: 3),
             grid: MetalDebugGridConfiguration(isEnabled: true),
-            pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false)
+            pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false),
+            probeMarker: MetalDebugProbeMarkerConfiguration(isEnabled: true, radius: 2, height: 6)
         )
 
         XCTAssertEqual(options.colorMode, .surface)
@@ -27,6 +28,9 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.normals.stride, 4)
         XCTAssertTrue(options.grid.isEnabled)
         XCTAssertFalse(options.pickedPointMarker.isEnabled)
+        XCTAssertTrue(options.probeMarker.isEnabled)
+        XCTAssertEqual(options.probeMarker.radius, 2)
+        XCTAssertEqual(options.probeMarker.height, 6)
         XCTAssertNotEqual(options.stableDebugID, MetalDebugTerrainDisplayOptions.default.stableDebugID)
     }
 
@@ -48,6 +52,26 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         let expectedNormalCount = (descriptor.meshPayload.vertices.count + config.stride - 1) / config.stride
 
         XCTAssertEqual(lines.count, expectedNormalCount * 2)
+    }
+
+    func testProbeMarkerLineGenerationCountIsStable() {
+        let lines = MetalDebugLineBuilder.makeProbeMarkerLineVertices(
+            point: MetalDebugWorldPoint(x: 4, y: 5, z: 6),
+            configuration: MetalDebugProbeMarkerConfiguration(isEnabled: true, radius: 2, height: 6)
+        )
+
+        XCTAssertEqual(lines.count, 6)
+        XCTAssertEqual(lines.first?.position, SIMD3<Float>(4, 5, 6))
+        XCTAssertEqual(lines.last?.position, SIMD3<Float>(4, 7, 8))
+    }
+
+    func testDisabledProbeMarkerGeneratesNoLines() {
+        let lines = MetalDebugLineBuilder.makeProbeMarkerLineVertices(
+            point: MetalDebugWorldPoint(x: 4, y: 5, z: 6),
+            configuration: MetalDebugProbeMarkerConfiguration(isEnabled: false)
+        )
+
+        XCTAssertTrue(lines.isEmpty)
     }
 
     func testVertexColorsChangeBetweenDebugModes() throws {

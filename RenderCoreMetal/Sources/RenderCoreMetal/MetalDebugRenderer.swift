@@ -22,6 +22,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     private var normalLineBuffers: MetalDebugLineBuffers?
     private var gridLineBuffers: MetalDebugLineBuffers?
     private var pickedPointLineBuffers: MetalDebugLineBuffers?
+    private var probePointLineBuffers: MetalDebugLineBuffers?
     private var frameStats = MetalDebugFrameStats.zero
     private var frameIndex: UInt64 = 0
     private var lastFrameTimestamp: CFTimeInterval?
@@ -118,6 +119,20 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         displayOptions: MetalDebugTerrainDisplayOptions,
         pickedPoint: MetalDebugWorldPoint?
     ) throws {
+        try updateMeshes(
+            descriptors,
+            displayOptions: displayOptions,
+            pickedPoint: pickedPoint,
+            probePoint: nil
+        )
+    }
+
+    public func updateMeshes(
+        _ descriptors: [MetalTerrainMeshDescriptor],
+        displayOptions: MetalDebugTerrainDisplayOptions,
+        pickedPoint: MetalDebugWorldPoint?,
+        probePoint: MetalDebugWorldPoint?
+    ) throws {
         let effectiveDescriptors = descriptors.map { descriptor in
             MetalTerrainMeshDescriptor(
                 meshPayload: descriptor.meshPayload,
@@ -165,6 +180,15 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 debugName: "telluric-debug-picked-point-lines"
             )
             : nil
+        probePointLineBuffers = displayOptions.probeMarker.isEnabled
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makeProbeMarkerLineVertices(
+                    point: probePoint,
+                    configuration: displayOptions.probeMarker
+                ),
+                debugName: "telluric-debug-probe-point-lines"
+            )
+            : nil
     }
 
     public func updateCamera(_ state: MetalDebugCameraState) {
@@ -178,6 +202,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         normalLineBuffers = nil
         gridLineBuffers = nil
         pickedPointLineBuffers = nil
+        probePointLineBuffers = nil
         frameStats = MetalDebugFrameStats.zero
         currentFrameStats = .zero
     }
@@ -227,6 +252,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         drawLineBuffers(normalLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(gridLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(pickedPointLineBuffers, encoder: encoder, uniforms: &uniforms)
+        drawLineBuffers(probePointLineBuffers, encoder: encoder, uniforms: &uniforms)
 
         encoder.endEncoding()
         commandBuffer.present(drawable)
@@ -359,7 +385,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             renderedLineVertexCount: (boundsLineBuffers?.vertexCount ?? 0)
                 + (normalLineBuffers?.vertexCount ?? 0)
                 + (gridLineBuffers?.vertexCount ?? 0)
-                + (pickedPointLineBuffers?.vertexCount ?? 0),
+                + (pickedPointLineBuffers?.vertexCount ?? 0)
+                + (probePointLineBuffers?.vertexCount ?? 0),
             frameIndex: frameIndex
         )
         currentFrameStats = frameStats

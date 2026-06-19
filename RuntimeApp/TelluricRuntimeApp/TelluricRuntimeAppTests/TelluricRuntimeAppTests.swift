@@ -97,6 +97,7 @@ struct TelluricRuntimeAppTests {
         #expect(RenderCoreMetalInfo.phase6Status == "metal-debug-terrain-renderer")
         #expect(RenderCoreMetalInfo.phase7Status == "runtime-camera-debug-controls")
         #expect(RenderCoreMetalInfo.phase8Status == "terrain-debug-picking-refinement")
+        #expect(RenderCoreMetalInfo.phase9Status == "terrain-query-player-probe-debug-marker")
     }
 
     @Test func renderCoreMetalCPUConversionMatchesDebugMeshPayload() throws {
@@ -180,6 +181,66 @@ struct TelluricRuntimeAppTests {
         #expect(model.debugDisplayOptions.normals.isEnabled)
         #expect(model.debugDisplayOptions.grid.isEnabled)
         #expect(model.debugDisplayOptions.pickedPointMarker.isEnabled)
+    }
+
+    @Test func playerProbeIsCreatedAfterInitialRebuild() throws {
+        let model = TelluricDebugRuntimeModel()
+        let probe = try #require(model.playerProbe)
+
+        #expect(probe.isGrounded)
+        #expect(probe.lastQueryResult?.isInsideKnownTerrain == true)
+        #expect(model.playerProbeWorldPoint != nil)
+        #expect(model.debugDisplayOptions.probeMarker.isEnabled)
+    }
+
+    @Test func movingPlayerProbeUpdatesPositionAndTerrainQuery() throws {
+        let model = TelluricDebugRuntimeModel()
+        let initial = try #require(model.playerProbe)
+
+        model.movePlayerProbeEast()
+        let moved = try #require(model.playerProbe)
+
+        #expect(moved.worldPosition.x == initial.worldPosition.x + model.playerProbeStepMeters)
+        #expect(moved.worldPosition.z == initial.worldPosition.z)
+        #expect(moved.worldPosition.y == moved.lastQueryResult?.heightMeters)
+        #expect(moved.lastQueryResult?.surface != nil)
+    }
+
+    @Test func resetPlayerProbeReturnsToCurrentCenterTerrain() throws {
+        let model = TelluricDebugRuntimeModel()
+
+        model.movePlayerProbeEast()
+        model.movePlayerProbeNorth()
+        model.resetPlayerProbe()
+
+        let reset = try #require(model.playerProbe)
+        #expect(reset.isGrounded)
+        #expect(reset.lastQueryResult?.isInsideKnownTerrain == true)
+    }
+
+    @Test func movePlayerProbeToPickedPointUsesLastInspectionPoint() throws {
+        let model = TelluricDebugRuntimeModel()
+        let result = try makePickingResult(model: model)
+
+        model.applyViewportPick(result)
+        model.movePlayerProbeToPickedPoint()
+
+        let probe = try #require(model.playerProbe)
+        let picked = try #require(result.hit?.worldPosition.position)
+        #expect(abs(probe.worldPosition.x - picked.x) < 0.0001)
+        #expect(abs(probe.worldPosition.z - picked.z) < 0.0001)
+        #expect(probe.lastQueryResult?.surface != nil)
+    }
+
+    @Test func togglingShowProbeUpdatesRenderOptions() {
+        let model = TelluricDebugRuntimeModel()
+        let firstHash = model.debugMeshUploadHash
+
+        model.showsPlayerProbe = false
+
+        #expect(model.debugDisplayOptions.probeMarker.isEnabled == false)
+        #expect(model.playerProbeWorldPoint == nil)
+        #expect(model.debugMeshUploadHash != firstHash)
     }
 
     @Test func selectingChunkFromMetalPickingUpdatesSelection() throws {

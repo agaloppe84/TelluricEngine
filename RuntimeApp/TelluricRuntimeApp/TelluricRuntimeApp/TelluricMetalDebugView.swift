@@ -19,6 +19,7 @@ struct TelluricMetalDebugView: View {
                         displayOptions: model.debugDisplayOptions,
                         cameraState: model.debugCameraState,
                         pickedPoint: model.pickedWorldPoint,
+                        probePoint: model.playerProbeWorldPoint,
                         isViewportPickingEnabled: model.isViewportPickingEnabled,
                         statsTick: timeline.date,
                         renderErrorMessage: $renderErrorMessage,

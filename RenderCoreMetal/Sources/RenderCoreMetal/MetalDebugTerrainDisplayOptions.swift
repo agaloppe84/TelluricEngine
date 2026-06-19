@@ -5,6 +5,7 @@ public struct MetalDebugTerrainDisplayOptions: Sendable, Hashable {
     public var normals: MetalDebugNormalsConfiguration
     public var grid: MetalDebugGridConfiguration
     public var pickedPointMarker: MetalDebugPickedPointMarkerConfiguration
+    public var probeMarker: MetalDebugProbeMarkerConfiguration
 
     public init(
         colorMode: MetalDebugTerrainColorMode = .mixed,
@@ -12,7 +13,8 @@ public struct MetalDebugTerrainDisplayOptions: Sendable, Hashable {
         showsBounds: Bool = false,
         normals: MetalDebugNormalsConfiguration = MetalDebugNormalsConfiguration(),
         grid: MetalDebugGridConfiguration = MetalDebugGridConfiguration(),
-        pickedPointMarker: MetalDebugPickedPointMarkerConfiguration = MetalDebugPickedPointMarkerConfiguration()
+        pickedPointMarker: MetalDebugPickedPointMarkerConfiguration = MetalDebugPickedPointMarkerConfiguration(),
+        probeMarker: MetalDebugProbeMarkerConfiguration = MetalDebugProbeMarkerConfiguration()
     ) {
         self.colorMode = colorMode
         self.isWireframeEnabled = isWireframeEnabled
@@ -20,6 +22,7 @@ public struct MetalDebugTerrainDisplayOptions: Sendable, Hashable {
         self.normals = normals
         self.grid = grid
         self.pickedPointMarker = pickedPointMarker
+        self.probeMarker = probeMarker
     }
 
     public static let `default` = MetalDebugTerrainDisplayOptions()
@@ -31,7 +34,8 @@ public struct MetalDebugTerrainDisplayOptions: Sendable, Hashable {
             UInt64(showsBounds ? 1 : 0),
             normals.stableDebugID,
             grid.stableDebugID,
-            pickedPointMarker.stableDebugID
+            pickedPointMarker.stableDebugID,
+            probeMarker.stableDebugID
         ] {
             state = (state &* 0x9E37_79B9_7F4A_7C15) ^ value
         }

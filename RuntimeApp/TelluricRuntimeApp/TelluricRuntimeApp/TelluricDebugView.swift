@@ -13,6 +13,8 @@ struct TelluricDebugView: View {
                     TelluricSnapshotStatsView(model: model)
                     TelluricChunkInspectorView(model: model)
                     TelluricTerrainInspectionView(model: model)
+                    TelluricPlayerProbeControlsView(model: model)
+                    TelluricPlayerProbeInspectorView(model: model)
                 }
                 .frame(width: 320, alignment: .topLeading)
 

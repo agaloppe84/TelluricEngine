@@ -19,10 +19,12 @@ struct TelluricMetalDebugOverlayView: View {
             row("Bounds", model.showsBounds ? "on" : "off")
             row("Normals", model.showsNormals ? "on" : "off")
             row("Grid", model.showsGrid ? "on" : "off")
+            row("Probe", model.showsPlayerProbe ? "on" : "off")
             row("Picking", model.isViewportPickingEnabled ? "on" : "off")
             row("Camera", cameraLabel)
             row("Selected", model.selectedChunkLabel)
             row("Inspect", model.terrainInspectionState?.statusLabel ?? "none")
+            row("Player", model.playerProbePositionLabel)
         }
         .font(.caption2.monospacedDigit())
         .padding(8)

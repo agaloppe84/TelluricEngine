@@ -26,6 +26,8 @@ struct TelluricMetalDebugToolbarView: View {
                     .toggleStyle(.checkbox)
                 Toggle("Pick point", isOn: $model.showsPickedPoint)
                     .toggleStyle(.checkbox)
+                Toggle("Probe", isOn: $model.showsPlayerProbe)
+                    .toggleStyle(.checkbox)
                 Toggle("Picking", isOn: $model.isViewportPickingEnabled)
                     .toggleStyle(.checkbox)
             }

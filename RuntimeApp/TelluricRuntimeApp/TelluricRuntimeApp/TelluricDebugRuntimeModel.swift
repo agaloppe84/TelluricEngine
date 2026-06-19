@@ -78,11 +78,14 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     @Published var showsNormals: Bool
     @Published var showsGrid: Bool
     @Published var showsPickedPoint: Bool
+    @Published var showsPlayerProbe: Bool
     @Published var isViewportPickingEnabled: Bool
     @Published var debugNormalLength: Float
+    @Published var playerProbeStepMeters: Float
     @Published private(set) var debugCameraState: MetalDebugCameraState
     @Published private(set) var selectedChunkCoord: WorldChunkCoord?
     @Published private(set) var terrainInspectionState: TelluricTerrainInspectionState?
+    @Published private(set) var playerProbe: TerrainProbe?
 
     let generatorVersion: TerrainGeneratorVersion
     let layout: TerrainChunkLayout
@@ -121,8 +124,10 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         self.showsNormals = false
         self.showsGrid = false
         self.showsPickedPoint = true
+        self.showsPlayerProbe = true
         self.isViewportPickingEnabled = true
         self.debugNormalLength = 2.0
+        self.playerProbeStepMeters = 1.0
         self.debugCameraState = cameraController.reset(bounds: nil)
 
         rebuild(fitCamera: true)
@@ -183,6 +188,9 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             ),
             pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(
                 isEnabled: showsPickedPoint
+            ),
+            probeMarker: MetalDebugProbeMarkerConfiguration(
+                isEnabled: showsPlayerProbe
             )
         )
     }
@@ -210,6 +218,29 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     var pickedWorldPoint: MetalDebugWorldPoint? {
         terrainInspectionState?.pickedWorldPoint
+    }
+
+    var playerProbeWorldPoint: MetalDebugWorldPoint? {
+        guard showsPlayerProbe, let playerProbe else {
+            return nil
+        }
+        return MetalDebugWorldPoint(
+            x: playerProbe.worldPosition.x,
+            y: playerProbe.worldPosition.y,
+            z: playerProbe.worldPosition.z
+        )
+    }
+
+    var playerProbePositionLabel: String {
+        guard let probe = playerProbe else {
+            return "none"
+        }
+        return String(
+            format: "%.2f, %.2f, %.2f",
+            Double(probe.worldPosition.x),
+            Double(probe.worldPosition.y),
+            Double(probe.worldPosition.z)
+        )
     }
 
     var debugTerrainMeshDescriptors: [MetalTerrainMeshDescriptor] {
@@ -258,6 +289,9 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         state = StableHasher.combine(state, selectedChunkCoord?.stableHash ?? 0)
         state = StableHasher.combine(state, selectedChunkCoord == nil ? 0 : 1)
         state = StableHasher.combine(state, terrainInspectionState?.stableDebugID ?? 0)
+        state = StableHasher.combine(state, playerProbe?.stableHash ?? 0)
+        state = StableHasher.combine(state, playerProbe == nil ? 0 : 1)
+        state = StableHasher.combine(state, showsPlayerProbe ? 1 : 0)
         return state
     }
 
@@ -312,6 +346,7 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             lastPlan = plan
             lastBuildResult = result
             snapshot = result.snapshot
+            refreshPlayerProbe(resetIfMissing: true)
             if fitCamera {
                 fitDebugCameraToTerrain()
             }
@@ -341,6 +376,7 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         centerChunkCoord = WorldChunkCoord(x: 0, z: 0)
         selectedChunkCoord = nil
         terrainInspectionState = nil
+        playerProbe = nil
         cache = InMemoryWorldCache()
         rebuild(fitCamera: true)
     }
@@ -361,6 +397,36 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     func setDebugTerrainColorMode(_ colorMode: MetalDebugTerrainColorMode) {
         debugTerrainColorMode = colorMode
+    }
+
+    func resetPlayerProbe() {
+        placePlayerProbe(worldX: centerWorldX + Float(layout.chunkSampleSpan) * 0.5, worldZ: centerWorldZ + Float(layout.chunkSampleSpan) * 0.5)
+    }
+
+    func movePlayerProbeNorth() {
+        movePlayerProbe(deltaX: 0, deltaZ: playerProbeStepMeters)
+    }
+
+    func movePlayerProbeSouth() {
+        movePlayerProbe(deltaX: 0, deltaZ: -playerProbeStepMeters)
+    }
+
+    func movePlayerProbeEast() {
+        movePlayerProbe(deltaX: playerProbeStepMeters, deltaZ: 0)
+    }
+
+    func movePlayerProbeWest() {
+        movePlayerProbe(deltaX: -playerProbeStepMeters, deltaZ: 0)
+    }
+
+    func movePlayerProbeToPickedPoint() {
+        guard let pickedWorldPoint else {
+            return
+        }
+        placePlayerProbe(
+            worldX: pickedWorldPoint.position.x,
+            worldZ: pickedWorldPoint.position.z
+        )
     }
 
     func zoomDebugCameraIn() {
@@ -470,6 +536,82 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     private func panDebugCamera(dx: Float, dz: Float) {
         debugCameraState = cameraController.pan(debugCameraState, dx: dx, dz: dz)
+    }
+
+    private var centerWorldX: Float {
+        Float(Int(centerChunkCoord.x) * layout.chunkSampleSpan)
+    }
+
+    private var centerWorldZ: Float {
+        Float(Int(centerChunkCoord.z) * layout.chunkSampleSpan)
+    }
+
+    private func makeTerrainQueryEngine() -> TerrainQueryEngine? {
+        guard let snapshot else {
+            return nil
+        }
+        return TerrainQueryEngine(snapshot: snapshot)
+    }
+
+    private func refreshPlayerProbe(resetIfMissing: Bool) {
+        guard let terrain = makeTerrainQueryEngine() else {
+            playerProbe = nil
+            return
+        }
+
+        let controller = TerrainProbeController()
+        if let playerProbe {
+            self.playerProbe = controller.place(
+                id: playerProbe.id,
+                worldX: playerProbe.worldPosition.x,
+                worldZ: playerProbe.worldPosition.z,
+                terrain: terrain
+            ).probe
+        } else if resetIfMissing {
+            self.playerProbe = controller.place(
+                worldX: centerWorldX + Float(layout.chunkSampleSpan) * 0.5,
+                worldZ: centerWorldZ + Float(layout.chunkSampleSpan) * 0.5,
+                terrain: terrain
+            ).probe
+        }
+    }
+
+    private func placePlayerProbe(worldX: Float, worldZ: Float) {
+        guard let terrain = makeTerrainQueryEngine() else {
+            errorMessage = "No resident snapshot is available for terrain probe queries."
+            return
+        }
+
+        let controller = TerrainProbeController()
+        let result = controller.place(
+            id: playerProbe?.id ?? 1,
+            worldX: worldX,
+            worldZ: worldZ,
+            terrain: terrain
+        )
+        playerProbe = result.probe
+        errorMessage = nil
+    }
+
+    private func movePlayerProbe(deltaX: Float, deltaZ: Float) {
+        guard let terrain = makeTerrainQueryEngine() else {
+            errorMessage = "No resident snapshot is available for terrain probe queries."
+            return
+        }
+
+        let controller = TerrainProbeController()
+        let probe = playerProbe ?? controller.place(
+            worldX: centerWorldX + Float(layout.chunkSampleSpan) * 0.5,
+            worldZ: centerWorldZ + Float(layout.chunkSampleSpan) * 0.5,
+            terrain: terrain
+        ).probe
+        let result = controller.move(
+            probe: probe,
+            request: TerrainProbeMoveRequest(deltaX: deltaX, deltaZ: deltaZ),
+            terrain: terrain
+        )
+        playerProbe = result.probe
+        errorMessage = nil
     }
 
     private static func hashLabel(_ value: UInt64?) -> String {
