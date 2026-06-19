@@ -28,8 +28,11 @@ public enum StableHasher {
         UInt64(UInt32(bitPattern: value))
     }
 
+    public static func bits(_ value: Int64) -> UInt64 {
+        UInt64(bitPattern: value)
+    }
+
     public static func bits(_ value: UInt32) -> UInt64 {
         UInt64(value)
     }
 }
-
