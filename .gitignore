@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+
+# Xcode / Swift local build outputs
+.build/
+**/.build/
+.derivedData/
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.ipa
+*.dSYM.zip
+*.dSYM
+.swiftpm/
+
+# Local assets and generated heavy files
+LocalAssets/*
+!LocalAssets/.gitkeep
+AssetCache/
+GeneratedAssets/
+BuildArtifacts/
+Captures/
+Recordings/
+ProfilingDumps/
+*.gputrace
+*.metal-capture
+
+# Editor
+.vscode/
+.idea/
+
+# Ruby/Rails safety: Telluric must not vendor or alter Ruby deps
+.bundle/
+vendor/bundle/
+Gemfile.lock
+
