@@ -20,6 +20,21 @@ final class MetalTerrainMeshUploaderTests: XCTestCase {
         XCTAssertEqual(vertices.first?.color.w, 1)
     }
 
+    func testCPUVertexConversionAppliesDebugVerticalScale() throws {
+        let mesh = makeMeshPayload()
+        let descriptor = MetalTerrainMeshDescriptor(meshPayload: mesh)
+
+        let vertices = try MetalTerrainMeshUploader.makeMetalVertices(
+            descriptor: descriptor,
+            verticalScale: 0.25
+        )
+
+        XCTAssertEqual(vertices.count, mesh.vertices.count)
+        XCTAssertEqual(vertices.first?.position.x, mesh.vertices.first?.position.x)
+        XCTAssertEqual(vertices.first?.position.y, (mesh.vertices.first?.position.y ?? 0) * 0.25)
+        XCTAssertEqual(vertices.first?.position.z, mesh.vertices.first?.position.z)
+    }
+
     func testDebugColorDiffersByLifecycleState() {
         let surface = TerrainSurfaceSample(
             material: .grass,

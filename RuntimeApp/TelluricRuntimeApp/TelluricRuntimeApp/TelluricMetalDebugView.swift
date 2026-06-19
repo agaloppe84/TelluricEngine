@@ -31,7 +31,7 @@ struct TelluricMetalDebugView: View {
                         onPanDrag: model.panDebugCameraFromDrag
                     )
                 }
-                .frame(minHeight: 280)
+                .frame(minHeight: 420)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)

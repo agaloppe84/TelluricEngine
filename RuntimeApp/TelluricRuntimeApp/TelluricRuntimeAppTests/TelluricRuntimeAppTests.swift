@@ -98,6 +98,7 @@ struct TelluricRuntimeAppTests {
         #expect(RenderCoreMetalInfo.phase7Status == "runtime-camera-debug-controls")
         #expect(RenderCoreMetalInfo.phase8Status == "terrain-debug-picking-refinement")
         #expect(RenderCoreMetalInfo.phase9Status == "terrain-query-player-probe-debug-marker")
+        #expect(RenderCoreMetalInfo.phase9_5Status == "debug-runtime-usability-fix")
     }
 
     @Test func renderCoreMetalCPUConversionMatchesDebugMeshPayload() throws {
@@ -118,7 +119,36 @@ struct TelluricRuntimeAppTests {
         #expect(model.isWireframeEnabled == false)
         #expect(model.showsBounds == false)
         #expect(model.showsNormals == false)
+        #expect(model.currentCameraPreset == .isometric)
+        #expect(model.debugDisplayOptions.verticalScale == 0.25)
         #expect(model.debugDisplayOptions.colorMode == .mixed)
+    }
+
+    @Test func defaultCameraPresetIsReadable() {
+        let model = TelluricDebugRuntimeModel()
+
+        #expect(model.currentCameraPreset == .isometric)
+        #expect(model.debugCameraState.pitchRadians > 0.5)
+        #expect(model.debugCameraState.pitchRadians < 1.1)
+        #expect(model.debugCameraState.orthographicScale > 0)
+        #expect(model.debugDisplayOptions.verticalScale <= 0.5)
+    }
+
+    @Test func cameraPresetChangesState() {
+        let model = TelluricDebugRuntimeModel()
+        let initial = model.debugCameraState
+
+        model.applyDebugCameraPreset(.topDown)
+        let topDown = model.debugCameraState
+
+        #expect(model.currentCameraPreset == .topDown)
+        #expect(topDown != initial)
+        #expect(topDown.pitchRadians > initial.pitchRadians)
+
+        model.applyDebugCameraPreset(.side)
+
+        #expect(model.currentCameraPreset == .side)
+        #expect(model.debugCameraState.pitchRadians < topDown.pitchRadians)
     }
 
     @Test func changingColorModeUpdatesDebugRenderSettings() {
@@ -183,14 +213,56 @@ struct TelluricRuntimeAppTests {
         #expect(model.debugDisplayOptions.pickedPointMarker.isEnabled)
     }
 
+    @Test func verticalScaleChangesDebugUploadHash() {
+        let model = TelluricDebugRuntimeModel()
+        let firstHash = model.debugMeshUploadHash
+
+        model.debugVerticalScale = 0.5
+
+        #expect(model.debugDisplayOptions.verticalScale == 0.5)
+        #expect(model.debugMeshUploadHash != firstHash)
+    }
+
     @Test func playerProbeIsCreatedAfterInitialRebuild() throws {
         let model = TelluricDebugRuntimeModel()
         let probe = try #require(model.playerProbe)
 
         #expect(probe.isGrounded)
+        #expect(probe.walkability.isWalkable)
         #expect(probe.lastQueryResult?.isInsideKnownTerrain == true)
         #expect(model.playerProbeWorldPoint != nil)
         #expect(model.debugDisplayOptions.probeMarker.isEnabled)
+    }
+
+    @Test func debugStatusReportsVisibleProbeAndTerrain() {
+        let model = TelluricDebugRuntimeModel()
+
+        #expect(model.isTerrainVisible)
+        #expect(model.isProbeVisible)
+        #expect(model.probeWalkabilityLabel.isEmpty == false)
+        #expect(model.currentCameraPresetLabel == "Isometric")
+        #expect(model.sanityDebugPresetLabel.contains("vertical"))
+        #expect(model.selectedChunkStatusLabel == "none")
+    }
+
+    @Test func probeMarkerConfigIsVisibleByDefault() {
+        let model = TelluricDebugRuntimeModel()
+        let marker = model.debugDisplayOptions.probeMarker
+
+        #expect(marker.isEnabled)
+        #expect(marker.radius >= 3)
+        #expect(marker.height >= 12)
+    }
+
+    @Test func focusProbeMovesCameraTargetToProbe() throws {
+        let model = TelluricDebugRuntimeModel()
+        let probe = try #require(model.playerProbe)
+
+        model.focusDebugCameraOnProbe()
+
+        #expect(model.currentCameraPreset == .custom)
+        #expect(abs(model.debugCameraState.target.x - probe.worldPosition.x) < 0.0001)
+        #expect(abs(model.debugCameraState.target.z - probe.worldPosition.z) < 0.0001)
     }
 
     @Test func movingPlayerProbeUpdatesPositionAndTerrainQuery() throws {

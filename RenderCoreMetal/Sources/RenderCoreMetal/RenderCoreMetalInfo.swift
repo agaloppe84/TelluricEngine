@@ -5,4 +5,5 @@ public enum RenderCoreMetalInfo {
     public static let phase7Status = "runtime-camera-debug-controls"
     public static let phase8Status = "terrain-debug-picking-refinement"
     public static let phase9Status = "terrain-query-player-probe-debug-marker"
+    public static let phase9_5Status = "debug-runtime-usability-fix"
 }

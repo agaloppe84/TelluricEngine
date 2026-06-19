@@ -7,19 +7,26 @@ public enum MetalDebugLineBuilder {
 
     public static func makeBoundsLineVertices(
         descriptors: [MetalTerrainMeshDescriptor],
-        color: SIMD4<Float> = boundsColor
+        color: SIMD4<Float> = boundsColor,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
         descriptors.flatMap {
-            makeBoundsLineVertices(bounds: $0.meshPayload.bounds, color: $0.isSelected ? selectedBoundsColor : color)
+            makeBoundsLineVertices(
+                bounds: $0.meshPayload.bounds,
+                color: $0.isSelected ? selectedBoundsColor : color,
+                verticalScale: verticalScale
+            )
         }
     }
 
     public static func makeBoundsLineVertices(
         bounds: TerrainMeshBounds,
-        color: SIMD4<Float> = boundsColor
+        color: SIMD4<Float> = boundsColor,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
-        let min = SIMD3<Float>(bounds.min.x, bounds.min.y, bounds.min.z)
-        let max = SIMD3<Float>(bounds.max.x, bounds.max.y, bounds.max.z)
+        let yScale = sanitizedVerticalScale(verticalScale)
+        let min = SIMD3<Float>(bounds.min.x, bounds.min.y * yScale, bounds.min.z)
+        let max = SIMD3<Float>(bounds.max.x, bounds.max.y * yScale, bounds.max.z)
         let corners = [
             SIMD3<Float>(min.x, min.y, min.z),
             SIMD3<Float>(max.x, min.y, min.z),
@@ -47,12 +54,14 @@ public enum MetalDebugLineBuilder {
     public static func makeNormalLineVertices(
         descriptors: [MetalTerrainMeshDescriptor],
         configuration: MetalDebugNormalsConfiguration,
-        color: SIMD4<Float> = normalColor
+        color: SIMD4<Float> = normalColor,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
         guard configuration.isEnabled else {
             return []
         }
 
+        let yScale = sanitizedVerticalScale(verticalScale)
         var lines: [MetalDebugLineVertex] = []
         for descriptor in descriptors {
             let vertices = descriptor.meshPayload.vertices
@@ -65,14 +74,18 @@ public enum MetalDebugLineBuilder {
                 let vertex = vertices[index]
                 let start = SIMD3<Float>(
                     vertex.position.x,
-                    vertex.position.y,
+                    vertex.position.y * yScale,
                     vertex.position.z
                 )
-                let normal = SIMD3<Float>(
+                let scaledNormal = SIMD3<Float>(
                     vertex.normal.x,
-                    vertex.normal.y,
+                    vertex.normal.y * yScale,
                     vertex.normal.z
                 )
+                let length = simd_length(scaledNormal)
+                let normal = length > 0 && length.isFinite
+                    ? scaledNormal / length
+                    : SIMD3<Float>(0, 1, 0)
                 let end = start + normal * configuration.length
                 lines.append(MetalDebugLineVertex(position: start, color: color))
                 lines.append(MetalDebugLineVertex(position: end, color: color))
@@ -83,7 +96,8 @@ public enum MetalDebugLineBuilder {
 
     public static func makeGridLineVertices(
         descriptors: [MetalTerrainMeshDescriptor],
-        configuration: MetalDebugGridConfiguration
+        configuration: MetalDebugGridConfiguration,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
         guard configuration.isEnabled,
               let first = descriptors.first?.meshPayload.bounds
@@ -91,11 +105,12 @@ public enum MetalDebugLineBuilder {
             return []
         }
 
+        let yScale = sanitizedVerticalScale(verticalScale)
         var minX = first.min.x
         var maxX = first.max.x
         var minZ = first.min.z
         var maxZ = first.max.z
-        var maxY = first.max.y
+        var maxY = first.max.y * yScale
         var xBoundaries = [first.min.x, first.max.x]
         var zBoundaries = [first.min.z, first.max.z]
 
@@ -105,7 +120,7 @@ public enum MetalDebugLineBuilder {
             maxX = max(maxX, bounds.max.x)
             minZ = min(minZ, bounds.min.z)
             maxZ = max(maxZ, bounds.max.z)
-            maxY = max(maxY, bounds.max.y)
+            maxY = max(maxY, bounds.max.y * yScale)
             xBoundaries.append(bounds.min.x)
             xBoundaries.append(bounds.max.x)
             zBoundaries.append(bounds.min.z)
@@ -132,13 +147,14 @@ public enum MetalDebugLineBuilder {
 
     public static func makePickedPointMarkerLineVertices(
         point: MetalDebugWorldPoint?,
-        configuration: MetalDebugPickedPointMarkerConfiguration
+        configuration: MetalDebugPickedPointMarkerConfiguration,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
         guard configuration.isEnabled, let point else {
             return []
         }
 
-        let center = point.position
+        let center = scaledPosition(point.position, verticalScale: verticalScale)
         let size = configuration.size
         let color = configuration.color
 
@@ -158,22 +174,37 @@ public enum MetalDebugLineBuilder {
 
     public static func makeProbeMarkerLineVertices(
         point: MetalDebugWorldPoint?,
-        configuration: MetalDebugProbeMarkerConfiguration
+        configuration: MetalDebugProbeMarkerConfiguration,
+        verticalScale: Float = 1
     ) -> [MetalDebugLineVertex] {
         guard configuration.isEnabled, let point else {
             return []
         }
 
-        let center = point.position
+        let center = scaledPosition(point.position, verticalScale: verticalScale)
         let radius = configuration.radius
         let height = configuration.height
         let color = configuration.color
-        let raisedCenter = center + SIMD3<Float>(0, radius, 0)
+        let base = center + SIMD3<Float>(0, radius * 0.2, 0)
+        let top = center + SIMD3<Float>(0, height, 0)
+        let haloY = center.y + height * 0.72
+        let east = SIMD3<Float>(center.x + radius, haloY, center.z)
+        let north = SIMD3<Float>(center.x, haloY, center.z + radius)
+        let west = SIMD3<Float>(center.x - radius, haloY, center.z)
+        let south = SIMD3<Float>(center.x, haloY, center.z - radius)
 
         let endpoints = [
-            (center, center + SIMD3<Float>(0, height, 0)),
-            (raisedCenter + SIMD3<Float>(-radius, 0, 0), raisedCenter + SIMD3<Float>(radius, 0, 0)),
-            (raisedCenter + SIMD3<Float>(0, 0, -radius), raisedCenter + SIMD3<Float>(0, 0, radius))
+            (center, top),
+            (base + SIMD3<Float>(-radius, 0, 0), base + SIMD3<Float>(radius, 0, 0)),
+            (base + SIMD3<Float>(0, 0, -radius), base + SIMD3<Float>(0, 0, radius)),
+            (top, east),
+            (top, north),
+            (top, west),
+            (top, south),
+            (east, north),
+            (north, west),
+            (west, south),
+            (south, east)
         ]
 
         return endpoints.flatMap { start, end in
@@ -197,6 +228,21 @@ public enum MetalDebugLineBuilder {
             .filter { value in
                 seen.insert(value.bitPattern).inserted
             }
+    }
+
+    private static func scaledPosition(
+        _ position: SIMD3<Float>,
+        verticalScale: Float
+    ) -> SIMD3<Float> {
+        SIMD3<Float>(
+            position.x,
+            position.y * sanitizedVerticalScale(verticalScale),
+            position.z
+        )
+    }
+
+    private static func sanitizedVerticalScale(_ value: Float) -> Float {
+        value.isFinite ? max(value, 0.05) : 1
     }
 
     private static let selectedBoundsColor = SIMD4<Float>(1.0, 1.0, 1.0, 1.0)

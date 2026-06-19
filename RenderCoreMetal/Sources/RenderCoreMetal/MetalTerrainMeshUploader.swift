@@ -18,27 +18,39 @@ public struct MetalTerrainMeshUploader {
     }
 
     public func upload(descriptors: [MetalTerrainMeshDescriptor]) throws -> MetalTerrainMeshUploadResult {
+        try upload(descriptors: descriptors, verticalScale: 1)
+    }
+
+    public func upload(
+        descriptors: [MetalTerrainMeshDescriptor],
+        verticalScale: Float
+    ) throws -> MetalTerrainMeshUploadResult {
         guard descriptors.isEmpty == false else {
             throw MetalDebugRenderError.emptyMeshList
         }
 
-        let buffers = try descriptors.map(upload)
+        let safeVerticalScale = Self.sanitizedVerticalScale(verticalScale)
+        let buffers = try descriptors.map { descriptor in
+            try upload(descriptor, verticalScale: safeVerticalScale)
+        }
         return MetalTerrainMeshUploadResult(buffers: buffers)
     }
 
     public static func makeMetalVertices(
-        descriptor: MetalTerrainMeshDescriptor
+        descriptor: MetalTerrainMeshDescriptor,
+        verticalScale: Float = 1
     ) throws -> [MetalTerrainVertex] {
         let mesh = descriptor.meshPayload
         guard mesh.vertices.isEmpty == false, mesh.indices.isEmpty == false else {
             throw MetalDebugRenderError.emptyMeshPayload(mesh.stableHash)
         }
 
+        let safeVerticalScale = sanitizedVerticalScale(verticalScale)
         return mesh.vertices.map { vertex in
             MetalTerrainVertex(
                 position: SIMD3<Float>(
                     vertex.position.x,
-                    vertex.position.y,
+                    vertex.position.y * safeVerticalScale,
                     vertex.position.z
                 ),
                 normal: SIMD3<Float>(
@@ -87,8 +99,11 @@ public struct MetalTerrainMeshUploader {
         }
     }
 
-    private func upload(_ descriptor: MetalTerrainMeshDescriptor) throws -> MetalTerrainMeshBuffers {
-        let vertices = try Self.makeMetalVertices(descriptor: descriptor)
+    private func upload(
+        _ descriptor: MetalTerrainMeshDescriptor,
+        verticalScale: Float
+    ) throws -> MetalTerrainMeshBuffers {
+        let vertices = try Self.makeMetalVertices(descriptor: descriptor, verticalScale: verticalScale)
         let indices = descriptor.meshPayload.indices
 
         guard let vertexBuffer = device.makeBuffer(
@@ -149,5 +164,9 @@ public struct MetalTerrainMeshUploader {
         amount: Float
     ) -> SIMD3<Float> {
         lhs * (1 - amount) + rhs * amount
+    }
+
+    private static func sanitizedVerticalScale(_ value: Float) -> Float {
+        value.isFinite ? max(value, 0.05) : 1
     }
 }

@@ -6,8 +6,8 @@ struct TelluricMetalDebugToolbarView: View {
     @ObservedObject var model: TelluricDebugRuntimeModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 Picker("Color", selection: colorModeBinding) {
                     ForEach(MetalDebugTerrainColorMode.allCases, id: \.self) { mode in
                         Text(mode.label).tag(mode)
@@ -18,6 +18,11 @@ struct TelluricMetalDebugToolbarView: View {
 
                 Toggle("Wireframe", isOn: $model.isWireframeEnabled)
                     .toggleStyle(.checkbox)
+                Toggle("Picking", isOn: $model.isViewportPickingEnabled)
+                    .toggleStyle(.checkbox)
+            }
+
+            HStack(spacing: 12) {
                 Toggle("Bounds", isOn: $model.showsBounds)
                     .toggleStyle(.checkbox)
                 Toggle("Normals", isOn: $model.showsNormals)
@@ -28,12 +33,18 @@ struct TelluricMetalDebugToolbarView: View {
                     .toggleStyle(.checkbox)
                 Toggle("Probe", isOn: $model.showsPlayerProbe)
                     .toggleStyle(.checkbox)
-                Toggle("Picking", isOn: $model.isViewportPickingEnabled)
-                    .toggleStyle(.checkbox)
-            }
 
-            HStack(spacing: 12) {
-                TelluricMetalCameraControlsView(model: model)
+                HStack(spacing: 6) {
+                    Text("Vertical")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Slider(value: verticalScaleBinding, in: 0.1...1.0)
+                        .frame(width: 120)
+                    Text(String(format: "%.2f", Double(model.debugVerticalScale)))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, alignment: .trailing)
+                }
 
                 if model.showsNormals {
                     HStack(spacing: 6) {
@@ -49,6 +60,8 @@ struct TelluricMetalDebugToolbarView: View {
                     }
                 }
             }
+
+            TelluricMetalCameraControlsView(model: model)
         }
     }
 
@@ -63,6 +76,13 @@ struct TelluricMetalDebugToolbarView: View {
         Binding(
             get: { Double(model.debugNormalLength) },
             set: { model.debugNormalLength = Float($0) }
+        )
+    }
+
+    private var verticalScaleBinding: Binding<Double> {
+        Binding(
+            get: { Double(model.debugVerticalScale) },
+            set: { model.debugVerticalScale = Float($0) }
         )
     }
 }

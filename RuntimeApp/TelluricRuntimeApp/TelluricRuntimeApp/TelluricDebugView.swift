@@ -8,31 +8,47 @@ struct TelluricDebugView: View {
             header
             Divider()
             HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 16) {
-                    TelluricRuntimeControlsView(model: model)
-                    TelluricSnapshotStatsView(model: model)
-                    TelluricChunkInspectorView(model: model)
-                    TelluricTerrainInspectionView(model: model)
-                    TelluricPlayerProbeControlsView(model: model)
-                    TelluricPlayerProbeInspectorView(model: model)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        TelluricRuntimeControlsView(model: model)
+                        TelluricDebugStatusView(model: model)
+                        TelluricSnapshotStatsView(model: model)
+                        TelluricPlayerProbeControlsView(model: model)
+                        TelluricPlayerProbeInspectorView(model: model)
+                        TelluricChunkInspectorView(model: model)
+                        TelluricTerrainInspectionView(model: model)
+                    }
+                    .padding(.trailing, 2)
                 }
-                .frame(width: 320, alignment: .topLeading)
+                .frame(width: 360, alignment: .topLeading)
 
                 VStack(alignment: .leading, spacing: 14) {
                     TelluricMetalDebugView(model: model)
-                        .frame(minHeight: 348)
+                        .frame(minHeight: 520)
 
-                    ScrollView([.horizontal, .vertical]) {
-                        TelluricChunkGridView(rows: model.gridRows, onSelectChunk: model.selectChunk)
-                            .padding(.trailing, 12)
-                            .padding(.bottom, 12)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Chunk grid")
+                                .font(.headline)
+                            Spacer()
+                            Text("SwiftUI debug selection")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ScrollView([.horizontal, .vertical]) {
+                            TelluricChunkGridView(rows: model.gridRows, onSelectChunk: model.selectChunk)
+                                .padding(.trailing, 12)
+                                .padding(.bottom, 12)
+                        }
                     }
+                    .frame(maxHeight: 230)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .padding(18)
         }
-        .frame(minWidth: 1120, minHeight: 780)
+        .frame(minWidth: 1280, minHeight: 860)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 

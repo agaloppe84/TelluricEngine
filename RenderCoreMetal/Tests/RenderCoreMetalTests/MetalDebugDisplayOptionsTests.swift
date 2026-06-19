@@ -15,6 +15,7 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
             colorMode: .surface,
             isWireframeEnabled: true,
             showsBounds: true,
+            verticalScale: 0.35,
             normals: MetalDebugNormalsConfiguration(isEnabled: true, stride: 4, length: 3),
             grid: MetalDebugGridConfiguration(isEnabled: true),
             pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false),
@@ -24,6 +25,7 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.colorMode, .surface)
         XCTAssertTrue(options.isWireframeEnabled)
         XCTAssertTrue(options.showsBounds)
+        XCTAssertEqual(options.verticalScale, 0.35)
         XCTAssertTrue(options.normals.isEnabled)
         XCTAssertEqual(options.normals.stride, 4)
         XCTAssertTrue(options.grid.isEnabled)
@@ -32,6 +34,15 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(options.probeMarker.radius, 2)
         XCTAssertEqual(options.probeMarker.height, 6)
         XCTAssertNotEqual(options.stableDebugID, MetalDebugTerrainDisplayOptions.default.stableDebugID)
+    }
+
+    func testDefaultDisplayOptionsUseReadableVerticalScaleAndVisibleProbe() {
+        let options = MetalDebugTerrainDisplayOptions.default
+
+        XCTAssertEqual(options.verticalScale, 0.25)
+        XCTAssertTrue(options.probeMarker.isEnabled)
+        XCTAssertGreaterThanOrEqual(options.probeMarker.radius, 3)
+        XCTAssertGreaterThanOrEqual(options.probeMarker.height, 12)
     }
 
     func testBoundsLineGenerationCountIsStable() {
@@ -60,9 +71,9 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
             configuration: MetalDebugProbeMarkerConfiguration(isEnabled: true, radius: 2, height: 6)
         )
 
-        XCTAssertEqual(lines.count, 6)
+        XCTAssertEqual(lines.count, 22)
         XCTAssertEqual(lines.first?.position, SIMD3<Float>(4, 5, 6))
-        XCTAssertEqual(lines.last?.position, SIMD3<Float>(4, 7, 8))
+        XCTAssertEqual(lines.map(\.position.y).max() ?? -1, Float(11))
     }
 
     func testDisabledProbeMarkerGeneratesNoLines() {
@@ -72,6 +83,17 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         )
 
         XCTAssertTrue(lines.isEmpty)
+    }
+
+    func testVerticalScaleAffectsProbeMarkerYOnly() {
+        let lines = MetalDebugLineBuilder.makeProbeMarkerLineVertices(
+            point: MetalDebugWorldPoint(x: 4, y: 20, z: 6),
+            configuration: MetalDebugProbeMarkerConfiguration(isEnabled: true, radius: 2, height: 6),
+            verticalScale: 0.25
+        )
+
+        XCTAssertEqual(lines.first?.position, SIMD3<Float>(4, 5, 6))
+        XCTAssertEqual(lines.map(\.position.y).max() ?? -1, Float(11))
     }
 
     func testVertexColorsChangeBetweenDebugModes() throws {

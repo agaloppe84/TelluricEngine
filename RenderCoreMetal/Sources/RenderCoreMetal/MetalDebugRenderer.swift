@@ -144,12 +144,18 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 debugName: descriptor.debugName
             )
         }
-        let result = try uploader.upload(descriptors: effectiveDescriptors)
+        let result = try uploader.upload(
+            descriptors: effectiveDescriptors,
+            verticalScale: displayOptions.verticalScale
+        )
         meshBuffers = result.buffers
         self.displayOptions = displayOptions
         boundsLineBuffers = displayOptions.showsBounds
             ? try makeLineBuffers(
-                vertices: MetalDebugLineBuilder.makeBoundsLineVertices(descriptors: effectiveDescriptors),
+                vertices: MetalDebugLineBuilder.makeBoundsLineVertices(
+                    descriptors: effectiveDescriptors,
+                    verticalScale: displayOptions.verticalScale
+                ),
                 debugName: "telluric-debug-bounds-lines"
             )
             : nil
@@ -157,7 +163,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             ? try makeLineBuffers(
                 vertices: MetalDebugLineBuilder.makeNormalLineVertices(
                     descriptors: effectiveDescriptors,
-                    configuration: displayOptions.normals
+                    configuration: displayOptions.normals,
+                    verticalScale: displayOptions.verticalScale
                 ),
                 debugName: "telluric-debug-normal-lines"
             )
@@ -166,7 +173,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             ? try makeLineBuffers(
                 vertices: MetalDebugLineBuilder.makeGridLineVertices(
                     descriptors: effectiveDescriptors,
-                    configuration: displayOptions.grid
+                    configuration: displayOptions.grid,
+                    verticalScale: displayOptions.verticalScale
                 ),
                 debugName: "telluric-debug-grid-lines"
             )
@@ -175,7 +183,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             ? try makeLineBuffers(
                 vertices: MetalDebugLineBuilder.makePickedPointMarkerLineVertices(
                     point: pickedPoint,
-                    configuration: displayOptions.pickedPointMarker
+                    configuration: displayOptions.pickedPointMarker,
+                    verticalScale: displayOptions.verticalScale
                 ),
                 debugName: "telluric-debug-picked-point-lines"
             )
@@ -184,7 +193,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             ? try makeLineBuffers(
                 vertices: MetalDebugLineBuilder.makeProbeMarkerLineVertices(
                     point: probePoint,
-                    configuration: displayOptions.probeMarker
+                    configuration: displayOptions.probeMarker,
+                    verticalScale: displayOptions.verticalScale
                 ),
                 debugName: "telluric-debug-probe-point-lines"
             )

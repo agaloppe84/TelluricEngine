@@ -8,13 +8,13 @@ public struct MetalDebugProbeMarkerConfiguration: Sendable, Hashable {
 
     public init(
         isEnabled: Bool = true,
-        radius: Float = 1.8,
-        height: Float = 5.0,
-        color: SIMD4<Float> = SIMD4<Float>(0.25, 1.0, 0.55, 1.0)
+        radius: Float = 3.2,
+        height: Float = 18.0,
+        color: SIMD4<Float> = SIMD4<Float>(1.0, 0.18, 0.72, 1.0)
     ) {
         self.isEnabled = isEnabled
-        self.radius = radius.isFinite ? max(radius, 0.1) : 1.8
-        self.height = height.isFinite ? max(height, 0.1) : 5.0
+        self.radius = radius.isFinite ? max(radius, 0.1) : 3.2
+        self.height = height.isFinite ? max(height, 0.1) : 18.0
         self.color = color
     }
 
@@ -28,4 +28,3 @@ public struct MetalDebugProbeMarkerConfiguration: Sendable, Hashable {
         return state
     }
 }
-
