@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		96EC50012FE6000000EC0001 /* EngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96EC50022FE6000000EC0001 /* EngineCore */; };
+		96EC50032FE6000000EC0001 /* EngineCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96EC50042FE6000000EC0001 /* EngineCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		9619430D2FE5C4CA009BD5A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				96EC50012FE6000000EC0001 /* EngineCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				96EC50032FE6000000EC0001 /* EngineCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,7 @@
 			);
 			name = TelluricRuntimeApp;
 			packageProductDependencies = (
+				96EC50022FE6000000EC0001 /* EngineCore */,
 			);
 			productName = TelluricRuntimeApp;
 			productReference = 961942FF2FE5C4C8009BD5A2 /* TelluricRuntimeApp.app */;
@@ -135,6 +143,7 @@
 			);
 			name = TelluricRuntimeAppTests;
 			packageProductDependencies = (
+				96EC50042FE6000000EC0001 /* EngineCore */,
 			);
 			productName = TelluricRuntimeAppTests;
 			productReference = 9619430C2FE5C4CA009BD5A2 /* TelluricRuntimeAppTests.xctest */;
@@ -195,6 +204,9 @@
 			);
 			mainGroup = 961942F62FE5C4C8009BD5A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96EC50052FE6000000EC0001 /* XCLocalSwiftPackageReference "../../EngineCore" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 961943002FE5C4C8009BD5A2 /* Products */;
 			projectDirPath = "";
@@ -563,6 +575,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		96EC50052FE6000000EC0001 /* XCLocalSwiftPackageReference "../../EngineCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../EngineCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		96EC50022FE6000000EC0001 /* EngineCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96EC50052FE6000000EC0001 /* XCLocalSwiftPackageReference "../../EngineCore" */;
+			productName = EngineCore;
+		};
+		96EC50042FE6000000EC0001 /* EngineCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96EC50052FE6000000EC0001 /* XCLocalSwiftPackageReference "../../EngineCore" */;
+			productName = EngineCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 961942F72FE5C4C8009BD5A2 /* Project object */;
 }
