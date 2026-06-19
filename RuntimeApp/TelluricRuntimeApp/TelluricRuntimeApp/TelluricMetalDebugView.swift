@@ -1,19 +1,28 @@
+import RenderCoreMetal
 import SwiftUI
 
 struct TelluricMetalDebugView: View {
     @ObservedObject var model: TelluricDebugRuntimeModel
     @State private var renderErrorMessage: String?
+    @State private var frameStats = MetalDebugFrameStats.zero
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            TelluricMetalDebugToolbarView(model: model)
 
             ZStack(alignment: .topLeading) {
-                TelluricMetalViewRepresentable(
-                    meshDescriptors: model.debugTerrainMeshDescriptors,
-                    meshHash: model.debugTerrainMeshHash,
-                    renderErrorMessage: $renderErrorMessage
-                )
+                TimelineView(.periodic(from: .now, by: 0.35)) { timeline in
+                    TelluricMetalViewRepresentable(
+                        meshDescriptors: model.debugTerrainMeshDescriptors,
+                        uploadHash: model.debugMeshUploadHash,
+                        displayOptions: model.debugDisplayOptions,
+                        cameraState: model.debugCameraState,
+                        statsTick: timeline.date,
+                        renderErrorMessage: $renderErrorMessage,
+                        frameStats: $frameStats
+                    )
+                }
                 .frame(minHeight: 280)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(
@@ -29,6 +38,15 @@ struct TelluricMetalDebugView: View {
                         .background(Color.red.opacity(0.78))
                         .clipShape(RoundedRectangle(cornerRadius: 5))
                         .padding(10)
+                }
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        TelluricMetalDebugOverlayView(model: model, frameStats: frameStats)
+                        Spacer()
+                    }
+                    .padding(10)
                 }
             }
         }

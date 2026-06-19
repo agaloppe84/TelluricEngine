@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TelluricChunkCellView: View {
     let cell: TelluricDebugChunkCell
+    let onSelect: (WorldChunkCoord) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -39,6 +40,10 @@ struct TelluricChunkCellView: View {
         .frame(width: 76, height: 64, alignment: .topLeading)
         .background(background)
         .overlay(border)
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+        .onTapGesture {
+            onSelect(cell.coord)
+        }
     }
 
     private var priorityLabel: String {
@@ -55,7 +60,10 @@ struct TelluricChunkCellView: View {
 
     private var border: some View {
         RoundedRectangle(cornerRadius: 6)
-            .stroke(cell.isCenter ? Color.white : Color.black.opacity(0.24), lineWidth: cell.isCenter ? 2 : 1)
+            .stroke(
+                cell.isSelected ? Color.yellow : (cell.isCenter ? Color.white : Color.black.opacity(0.24)),
+                lineWidth: cell.isSelected || cell.isCenter ? 2 : 1
+            )
     }
 
     private var fillColor: Color {

@@ -6,5 +6,6 @@ final class RenderCoreMetalInfoTests: XCTestCase {
         XCTAssertEqual(RenderCoreMetalInfo.moduleName, "RenderCoreMetal")
         XCTAssertEqual(RenderCoreMetalInfo.phase0Status, "placeholder")
         XCTAssertEqual(RenderCoreMetalInfo.phase6Status, "metal-debug-terrain-renderer")
+        XCTAssertEqual(RenderCoreMetalInfo.phase7Status, "runtime-camera-debug-controls")
     }
 }

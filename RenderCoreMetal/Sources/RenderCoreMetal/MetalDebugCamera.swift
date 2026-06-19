@@ -2,11 +2,7 @@ import EngineCore
 import simd
 
 public struct MetalDebugCamera {
-    public var target: SIMD3<Float>
-    public var distance: Float
-    public var orthographicScale: Float
-    public var nearZ: Float
-    public var farZ: Float
+    public var state: MetalDebugCameraState
 
     public init(
         target: SIMD3<Float> = .zero,
@@ -15,53 +11,43 @@ public struct MetalDebugCamera {
         nearZ: Float = 0.1,
         farZ: Float = 2_000
     ) {
-        self.target = target
-        self.distance = distance
-        self.orthographicScale = orthographicScale
-        self.nearZ = nearZ
-        self.farZ = farZ
-    }
-
-    public static func fitting(bounds: [TerrainMeshBounds]) -> MetalDebugCamera {
-        guard let first = bounds.first else {
-            return MetalDebugCamera()
-        }
-
-        var minPoint = SIMD3<Float>(first.min.x, first.min.y, first.min.z)
-        var maxPoint = SIMD3<Float>(first.max.x, first.max.y, first.max.z)
-
-        for bounds in bounds.dropFirst() {
-            minPoint = simd_min(minPoint, SIMD3<Float>(bounds.min.x, bounds.min.y, bounds.min.z))
-            maxPoint = simd_max(maxPoint, SIMD3<Float>(bounds.max.x, bounds.max.y, bounds.max.z))
-        }
-
-        let center = (minPoint + maxPoint) * 0.5
-        let extent = maxPoint - minPoint
-        let radius = max(max(extent.x, extent.z), extent.y) * 0.5
-        let scale = max(radius * 2.8, 48)
-
-        return MetalDebugCamera(
-            target: center,
-            distance: max(scale * 1.4, 120),
-            orthographicScale: scale,
-            nearZ: 0.1,
-            farZ: max(scale * 6, 2_000)
+        self.state = MetalDebugCameraState(
+            target: target,
+            distance: distance,
+            orthographicScale: orthographicScale,
+            nearZ: nearZ,
+            farZ: farZ
         )
     }
 
+    public init(state: MetalDebugCameraState) {
+        self.state = state
+    }
+
+    public static func fitting(bounds: [TerrainMeshBounds]) -> MetalDebugCamera {
+        MetalDebugCamera(state: MetalDebugCameraController().reset(bounds: bounds))
+    }
+
     public func viewProjectionMatrix(aspectRatio: Float) -> simd_float4x4 {
-        let direction = simd_normalize(SIMD3<Float>(0.72, 1.08, 0.86))
-        let eye = target + direction * distance
-        let view = Self.lookAt(eye: eye, target: target, up: SIMD3<Float>(0, 1, 0))
-        let halfHeight = orthographicScale * 0.5
+        let horizontal = cos(state.pitchRadians)
+        let direction = simd_normalize(
+            SIMD3<Float>(
+                sin(state.yawRadians) * horizontal,
+                sin(state.pitchRadians),
+                cos(state.yawRadians) * horizontal
+            )
+        )
+        let eye = state.target + direction * state.distance
+        let view = Self.lookAt(eye: eye, target: state.target, up: SIMD3<Float>(0, 1, 0))
+        let halfHeight = state.orthographicScale * 0.5
         let halfWidth = halfHeight * max(aspectRatio, 0.1)
         let projection = Self.orthographic(
             left: -halfWidth,
             right: halfWidth,
             bottom: -halfHeight,
             top: halfHeight,
-            nearZ: nearZ,
-            farZ: farZ
+            nearZ: state.nearZ,
+            farZ: state.farZ
         )
 
         return projection * view

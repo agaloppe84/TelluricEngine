@@ -2,18 +2,29 @@ import EngineCore
 import Foundation
 import Metal
 import MetalKit
+import QuartzCore
 import simd
 
 public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     public let device: MTLDevice
     public let configuration: MetalDebugRendererConfiguration
+    public private(set) var currentFrameStats = MetalDebugFrameStats.zero
 
     private let commandQueue: MTLCommandQueue
     private let pipelineState: MTLRenderPipelineState
+    private let linePipelineState: MTLRenderPipelineState
     private let depthStencilState: MTLDepthStencilState
     private let uploader: MetalTerrainMeshUploader
     private var meshBuffers: [MetalTerrainMeshBuffers] = []
     private var camera = MetalDebugCamera()
+    private var displayOptions = MetalDebugTerrainDisplayOptions.default
+    private var boundsLineBuffers: MetalDebugLineBuffers?
+    private var normalLineBuffers: MetalDebugLineBuffers?
+    private var frameStats = MetalDebugFrameStats.zero
+    private var frameIndex: UInt64 = 0
+    private var lastFrameTimestamp: CFTimeInterval?
+    private var lastStatsTimestamp: CFTimeInterval?
+    private var framesSinceStatsPublish: UInt64 = 0
 
     public init(
         device: MTLDevice,
@@ -31,6 +42,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         let library = try Self.makeShaderLibrary(device: device)
         let vertexFunction = library.makeFunction(name: "telluric_debug_terrain_vertex")
         let fragmentFunction = library.makeFunction(name: "telluric_debug_terrain_fragment")
+        let lineVertexFunction = library.makeFunction(name: "telluric_debug_line_vertex")
+        let lineFragmentFunction = library.makeFunction(name: "telluric_debug_line_fragment")
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.label = "Telluric Debug Terrain Pipeline"
@@ -44,6 +57,20 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             self.pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
         } catch {
             throw MetalDebugRenderError.pipelineCreationFailed(error.localizedDescription)
+        }
+
+        let linePipelineDescriptor = MTLRenderPipelineDescriptor()
+        linePipelineDescriptor.label = "Telluric Debug Line Pipeline"
+        linePipelineDescriptor.vertexFunction = lineVertexFunction
+        linePipelineDescriptor.fragmentFunction = lineFragmentFunction
+        linePipelineDescriptor.vertexDescriptor = Self.makeLineVertexDescriptor()
+        linePipelineDescriptor.colorAttachments[0].pixelFormat = configuration.colorPixelFormat
+        linePipelineDescriptor.depthAttachmentPixelFormat = configuration.depthPixelFormat
+
+        do {
+            self.linePipelineState = try device.makeRenderPipelineState(descriptor: linePipelineDescriptor)
+        } catch {
+            throw MetalDebugRenderError.pipelineCreationFailed("line pipeline: \(error.localizedDescription)")
         }
 
         let depthDescriptor = MTLDepthStencilDescriptor()
@@ -70,14 +97,55 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     }
 
     public func updateMeshes(_ descriptors: [MetalTerrainMeshDescriptor]) throws {
-        let result = try uploader.upload(descriptors: descriptors)
+        try updateMeshes(descriptors, displayOptions: .default)
+    }
+
+    public func updateMeshes(
+        _ descriptors: [MetalTerrainMeshDescriptor],
+        displayOptions: MetalDebugTerrainDisplayOptions
+    ) throws {
+        let effectiveDescriptors = descriptors.map { descriptor in
+            MetalTerrainMeshDescriptor(
+                meshPayload: descriptor.meshPayload,
+                chunkID: descriptor.chunkID,
+                lifecycleState: descriptor.lifecycleState,
+                payloadState: descriptor.payloadState,
+                colorMode: displayOptions.colorMode,
+                isSelected: descriptor.isSelected,
+                debugName: descriptor.debugName
+            )
+        }
+        let result = try uploader.upload(descriptors: effectiveDescriptors)
         meshBuffers = result.buffers
-        camera = MetalDebugCamera.fitting(bounds: result.buffers.map(\.bounds))
+        self.displayOptions = displayOptions
+        boundsLineBuffers = displayOptions.showsBounds
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makeBoundsLineVertices(descriptors: effectiveDescriptors),
+                debugName: "telluric-debug-bounds-lines"
+            )
+            : nil
+        normalLineBuffers = displayOptions.normals.isEnabled
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makeNormalLineVertices(
+                    descriptors: effectiveDescriptors,
+                    configuration: displayOptions.normals
+                ),
+                debugName: "telluric-debug-normal-lines"
+            )
+            : nil
+    }
+
+    public func updateCamera(_ state: MetalDebugCameraState) {
+        camera = MetalDebugCamera(state: state)
     }
 
     public func clearMeshes() {
         meshBuffers = []
         camera = MetalDebugCamera()
+        boundsLineBuffers = nil
+        normalLineBuffers = nil
+        frameStats = MetalDebugFrameStats.zero
+        currentFrameStats = .zero
     }
 
     public func draw(in view: MTKView) {
@@ -92,12 +160,17 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
 
         let drawableSize = view.drawableSize
         let aspectRatio = drawableSize.height > 0 ? Float(drawableSize.width / drawableSize.height) : 1
-        var uniforms = MetalDebugUniforms(
-            mvp: camera.viewProjectionMatrix(aspectRatio: aspectRatio)
-        )
+        let now = CACurrentMediaTime()
+        let frameDelta = lastFrameTimestamp.map { now - $0 } ?? 0
+        lastFrameTimestamp = now
+        frameIndex += 1
+        framesSinceStatsPublish += 1
+
+        var uniforms = MetalDebugUniforms(mvp: camera.viewProjectionMatrix(aspectRatio: aspectRatio))
 
         encoder.setRenderPipelineState(pipelineState)
         encoder.setDepthStencilState(depthStencilState)
+        encoder.setTriangleFillMode(displayOptions.isWireframeEnabled ? .lines : .fill)
         encoder.setVertexBytes(
             &uniforms,
             length: MemoryLayout<MetalDebugUniforms>.stride,
@@ -115,9 +188,14 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             )
         }
 
+        encoder.setTriangleFillMode(.fill)
+        drawLineBuffers(boundsLineBuffers, encoder: encoder, uniforms: &uniforms)
+        drawLineBuffers(normalLineBuffers, encoder: encoder, uniforms: &uniforms)
+
         encoder.endEncoding()
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        updateFrameStats(now: now, frameDelta: frameDelta)
     }
 
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -164,6 +242,92 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         return descriptor
     }
 
+    private static func makeLineVertexDescriptor() -> MTLVertexDescriptor {
+        let descriptor = MTLVertexDescriptor()
+        descriptor.attributes[0].format = .float3
+        descriptor.attributes[0].offset = MemoryLayout<MetalDebugLineVertex>.offset(of: \.position) ?? 0
+        descriptor.attributes[0].bufferIndex = 0
+        descriptor.attributes[1].format = .float4
+        descriptor.attributes[1].offset = MemoryLayout<MetalDebugLineVertex>.offset(of: \.color) ?? 16
+        descriptor.attributes[1].bufferIndex = 0
+        descriptor.layouts[0].stride = MemoryLayout<MetalDebugLineVertex>.stride
+        descriptor.layouts[0].stepRate = 1
+        descriptor.layouts[0].stepFunction = .perVertex
+        return descriptor
+    }
+
+    private func makeLineBuffers(
+        vertices: [MetalDebugLineVertex],
+        debugName: String
+    ) throws -> MetalDebugLineBuffers? {
+        guard vertices.isEmpty == false else {
+            return nil
+        }
+
+        guard let vertexBuffer = device.makeBuffer(
+            bytes: vertices,
+            length: vertices.count * MemoryLayout<MetalDebugLineVertex>.stride,
+            options: [.storageModeShared]
+        ) else {
+            throw MetalDebugRenderError.bufferAllocationFailed(debugName)
+        }
+
+        vertexBuffer.label = debugName
+        return MetalDebugLineBuffers(
+            vertexBuffer: vertexBuffer,
+            vertexCount: vertices.count,
+            debugName: debugName
+        )
+    }
+
+    private func drawLineBuffers(
+        _ lineBuffers: MetalDebugLineBuffers?,
+        encoder: MTLRenderCommandEncoder,
+        uniforms: inout MetalDebugUniforms
+    ) {
+        guard let lineBuffers else {
+            return
+        }
+
+        encoder.setRenderPipelineState(linePipelineState)
+        encoder.setDepthStencilState(depthStencilState)
+        encoder.setVertexBytes(
+            &uniforms,
+            length: MemoryLayout<MetalDebugUniforms>.stride,
+            index: 1
+        )
+        encoder.setVertexBuffer(lineBuffers.vertexBuffer, offset: 0, index: 0)
+        encoder.drawPrimitives(
+            type: .line,
+            vertexStart: 0,
+            vertexCount: lineBuffers.vertexCount
+        )
+    }
+
+    private func updateFrameStats(now: CFTimeInterval, frameDelta: CFTimeInterval) {
+        let publishInterval: CFTimeInterval = 0.35
+        let previousPublish = lastStatsTimestamp ?? now
+        let elapsed = max(now - previousPublish, 0.0001)
+
+        guard lastStatsTimestamp == nil || elapsed >= publishInterval else {
+            return
+        }
+
+        let fps = Double(framesSinceStatsPublish) / elapsed
+        frameStats = MetalDebugFrameStats(
+            framesPerSecond: fps.isFinite ? fps : 0,
+            frameTimeMilliseconds: frameDelta > 0 ? frameDelta * 1_000 : 0,
+            renderedMeshCount: meshBuffers.count,
+            renderedVertexCount: meshBuffers.reduce(0) { $0 + $1.vertexCount },
+            renderedIndexCount: meshBuffers.reduce(0) { $0 + $1.indexCount },
+            renderedLineVertexCount: (boundsLineBuffers?.vertexCount ?? 0) + (normalLineBuffers?.vertexCount ?? 0),
+            frameIndex: frameIndex
+        )
+        currentFrameStats = frameStats
+        lastStatsTimestamp = now
+        framesSinceStatsPublish = 0
+    }
+
     private static let fallbackShaderSource = """
     #include <metal_stdlib>
     using namespace metal;
@@ -194,6 +358,25 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     }
 
     fragment float4 telluric_debug_terrain_fragment(VertexOut in [[stage_in]]) {
+        return in.color;
+    }
+
+    struct LineVertexIn {
+        float3 position [[attribute(0)]];
+        float4 color [[attribute(1)]];
+    };
+
+    vertex VertexOut telluric_debug_line_vertex(
+        LineVertexIn in [[stage_in]],
+        constant Uniforms& uniforms [[buffer(1)]]
+    ) {
+        VertexOut out;
+        out.position = uniforms.mvp * float4(in.position, 1.0);
+        out.color = in.color;
+        return out;
+    }
+
+    fragment float4 telluric_debug_line_fragment(VertexOut in [[stage_in]]) {
         return in.color;
     }
     """

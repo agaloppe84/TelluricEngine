@@ -5,6 +5,8 @@ public struct MetalTerrainMeshDescriptor: Hashable {
     public let chunkID: WorldChunkID?
     public let lifecycleState: ChunkLifecycleState
     public let payloadState: CachedChunkPayloadState?
+    public let colorMode: MetalDebugTerrainColorMode
+    public let isSelected: Bool
     public let debugName: String
 
     public init(
@@ -12,12 +14,16 @@ public struct MetalTerrainMeshDescriptor: Hashable {
         chunkID: WorldChunkID? = nil,
         lifecycleState: ChunkLifecycleState = .meshRequested,
         payloadState: CachedChunkPayloadState? = nil,
+        colorMode: MetalDebugTerrainColorMode = .mixed,
+        isSelected: Bool = false,
         debugName: String? = nil
     ) {
         self.meshPayload = meshPayload
         self.chunkID = chunkID
         self.lifecycleState = lifecycleState
         self.payloadState = payloadState
+        self.colorMode = colorMode
+        self.isSelected = isSelected
         self.debugName = debugName ?? "chunk-\(meshPayload.chunkCoord.x)-\(meshPayload.chunkCoord.z)"
     }
 }

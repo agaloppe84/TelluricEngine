@@ -11,15 +11,16 @@ struct TelluricDebugView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     TelluricRuntimeControlsView(model: model)
                     TelluricSnapshotStatsView(model: model)
+                    TelluricChunkInspectorView(model: model)
                 }
-                .frame(width: 286, alignment: .topLeading)
+                .frame(width: 320, alignment: .topLeading)
 
                 VStack(alignment: .leading, spacing: 14) {
                     TelluricMetalDebugView(model: model)
                         .frame(minHeight: 348)
 
                     ScrollView([.horizontal, .vertical]) {
-                        TelluricChunkGridView(rows: model.gridRows)
+                        TelluricChunkGridView(rows: model.gridRows, onSelectChunk: model.selectChunk)
                             .padding(.trailing, 12)
                             .padding(.bottom, 12)
                     }

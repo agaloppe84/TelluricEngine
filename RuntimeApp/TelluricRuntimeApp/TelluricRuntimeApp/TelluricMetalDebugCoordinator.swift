@@ -6,7 +6,8 @@ import SwiftUI
 @MainActor
 final class TelluricMetalDebugCoordinator {
     private var renderer: MetalDebugRenderer?
-    private var lastMeshHash: UInt64?
+    private var lastUploadHash: UInt64?
+    private var lastCameraState: MetalDebugCameraState?
 
     func makeView() -> MTKView {
         let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
@@ -20,24 +21,35 @@ final class TelluricMetalDebugCoordinator {
     func update(
         view: MTKView,
         meshDescriptors: [MetalTerrainMeshDescriptor],
-        meshHash: UInt64,
-        renderErrorMessage: Binding<String?>
+        uploadHash: UInt64,
+        displayOptions: MetalDebugTerrainDisplayOptions,
+        cameraState: MetalDebugCameraState,
+        renderErrorMessage: Binding<String?>,
+        frameStats: Binding<MetalDebugFrameStats>
     ) {
         do {
             let renderer = try ensureRenderer(for: view)
 
             guard meshDescriptors.isEmpty == false else {
                 renderer.clearMeshes()
-                lastMeshHash = nil
+                lastUploadHash = nil
+                lastCameraState = nil
+                frameStats.wrappedValue = renderer.currentFrameStats
                 renderErrorMessage.wrappedValue = "No terrain mesh payloads are available for Metal debug rendering."
                 return
             }
 
-            if lastMeshHash != meshHash {
-                try renderer.updateMeshes(meshDescriptors)
-                lastMeshHash = meshHash
+            if lastUploadHash != uploadHash {
+                try renderer.updateMeshes(meshDescriptors, displayOptions: displayOptions)
+                lastUploadHash = uploadHash
             }
 
+            if lastCameraState != cameraState {
+                renderer.updateCamera(cameraState)
+                lastCameraState = cameraState
+            }
+
+            frameStats.wrappedValue = renderer.currentFrameStats
             renderErrorMessage.wrappedValue = nil
         } catch {
             renderErrorMessage.wrappedValue = String(describing: error)

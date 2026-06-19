@@ -10,6 +10,7 @@ struct TelluricDebugChunkCell: Identifiable, Hashable {
     let priorityRank: Int?
     let isCached: Bool
     let isCenter: Bool
+    let isSelected: Bool
 
     var id: String {
         "\(coord.x):\(coord.z)"
@@ -71,6 +72,13 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     @Published private(set) var lastBuildResult: ChunkBuildResult?
     @Published private(set) var snapshot: ResidentWorldSnapshot?
     @Published private(set) var errorMessage: String?
+    @Published var debugTerrainColorMode: MetalDebugTerrainColorMode
+    @Published var isWireframeEnabled: Bool
+    @Published var showsBounds: Bool
+    @Published var showsNormals: Bool
+    @Published var debugNormalLength: Float
+    @Published private(set) var debugCameraState: MetalDebugCameraState
+    @Published private(set) var selectedChunkCoord: WorldChunkCoord?
 
     let generatorVersion: TerrainGeneratorVersion
     let layout: TerrainChunkLayout
@@ -78,6 +86,7 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     private let planner: WorldResidencyPlanner
     private let pipeline: ChunkBuildPipeline
+    private let cameraController: MetalDebugCameraController
     private var cache: InMemoryWorldCache
 
     init(
@@ -100,9 +109,16 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         self.centerChunkCoord = centerChunkCoord
         self.planner = WorldResidencyPlanner()
         self.pipeline = ChunkBuildPipeline()
+        self.cameraController = MetalDebugCameraController()
         self.cache = InMemoryWorldCache()
+        self.debugTerrainColorMode = .mixed
+        self.isWireframeEnabled = false
+        self.showsBounds = false
+        self.showsNormals = false
+        self.debugNormalLength = 2.0
+        self.debugCameraState = cameraController.reset(bounds: nil)
 
-        rebuild()
+        rebuild(fitCamera: true)
     }
 
     var centerLabel: String {
@@ -145,6 +161,40 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         snapshot?.stats.activeRecords ?? 0
     }
 
+    var debugDisplayOptions: MetalDebugTerrainDisplayOptions {
+        MetalDebugTerrainDisplayOptions(
+            colorMode: debugTerrainColorMode,
+            isWireframeEnabled: isWireframeEnabled,
+            showsBounds: showsBounds,
+            normals: MetalDebugNormalsConfiguration(
+                isEnabled: showsNormals,
+                stride: 8,
+                length: debugNormalLength
+            )
+        )
+    }
+
+    var selectedChunkRecord: CachedChunkRecord? {
+        guard let selectedChunkCoord else {
+            return nil
+        }
+        return snapshot?.records.first { $0.chunkCoord == selectedChunkCoord }
+    }
+
+    var selectedChunkTarget: ChunkLifecycleTarget? {
+        guard let selectedChunkCoord else {
+            return nil
+        }
+        return lastPlan?.target(for: selectedChunkCoord)
+    }
+
+    var selectedChunkLabel: String {
+        guard let selectedChunkCoord else {
+            return "none"
+        }
+        return "(\(selectedChunkCoord.x), \(selectedChunkCoord.z))"
+    }
+
     var debugTerrainMeshDescriptors: [MetalTerrainMeshDescriptor] {
         (snapshot?.records ?? []).compactMap { record in
             guard let meshPayload = record.meshPayload else {
@@ -156,6 +206,8 @@ final class TelluricDebugRuntimeModel: ObservableObject {
                 chunkID: record.chunkID,
                 lifecycleState: record.lifecycleState,
                 payloadState: record.payloadState,
+                colorMode: debugTerrainColorMode,
+                isSelected: record.chunkCoord == selectedChunkCoord,
                 debugName: "chunk-\(record.chunkCoord.x)-\(record.chunkCoord.z)"
             )
         }
@@ -178,9 +230,17 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             state = StableHasher.combine(state, record.lifecycleState.stableHash)
             state = StableHasher.combine(state, record.payloadState.stableHash)
             state = StableHasher.combine(state, meshPayload.stableHash)
+            state = StableHasher.combine(state, record.chunkCoord == selectedChunkCoord ? 1 : 0)
         }
 
         return StableHasher.combine(state, UInt64(debugTerrainMeshCount))
+    }
+
+    var debugMeshUploadHash: UInt64 {
+        var state = StableHasher.combine(debugTerrainMeshHash, debugDisplayOptions.stableDebugID)
+        state = StableHasher.combine(state, selectedChunkCoord?.stableHash ?? 0)
+        state = StableHasher.combine(state, selectedChunkCoord == nil ? 0 : 1)
+        return state
     }
 
     var gridRows: [TelluricDebugChunkGridRow] {
@@ -201,7 +261,8 @@ final class TelluricDebugRuntimeModel: ObservableObject {
                     payloadState: record?.payloadState,
                     priorityRank: record?.priority.rank ?? target?.priority.rank,
                     isCached: record != nil,
-                    isCenter: coord == centerChunkCoord
+                    isCenter: coord == centerChunkCoord,
+                    isSelected: coord == selectedChunkCoord
                 )
             }
 
@@ -210,6 +271,10 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     func rebuild() {
+        rebuild(fitCamera: false)
+    }
+
+    private func rebuild(fitCamera: Bool) {
         do {
             let request = WorldResidencyRequest(
                 worldSeed: WorldSeed(seed),
@@ -229,6 +294,9 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             lastPlan = plan
             lastBuildResult = result
             snapshot = result.snapshot
+            if fitCamera {
+                fitDebugCameraToTerrain()
+            }
             errorMessage = nil
         } catch {
             errorMessage = String(describing: error)
@@ -253,8 +321,70 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     func reset() {
         centerChunkCoord = WorldChunkCoord(x: 0, z: 0)
+        selectedChunkCoord = nil
         cache = InMemoryWorldCache()
-        rebuild()
+        rebuild(fitCamera: true)
+    }
+
+    func selectChunk(_ coord: WorldChunkCoord) {
+        selectedChunkCoord = coord
+    }
+
+    func clearSelection() {
+        selectedChunkCoord = nil
+    }
+
+    func setDebugTerrainColorMode(_ colorMode: MetalDebugTerrainColorMode) {
+        debugTerrainColorMode = colorMode
+    }
+
+    func zoomDebugCameraIn() {
+        debugCameraState = cameraController.zoom(debugCameraState, delta: -0.18)
+    }
+
+    func zoomDebugCameraOut() {
+        debugCameraState = cameraController.zoom(debugCameraState, delta: 0.22)
+    }
+
+    func rotateDebugCameraLeft() {
+        debugCameraState = cameraController.orbit(debugCameraState, deltaYaw: -0.18, deltaPitch: 0)
+    }
+
+    func rotateDebugCameraRight() {
+        debugCameraState = cameraController.orbit(debugCameraState, deltaYaw: 0.18, deltaPitch: 0)
+    }
+
+    func pitchDebugCameraUp() {
+        debugCameraState = cameraController.orbit(debugCameraState, deltaYaw: 0, deltaPitch: 0.10)
+    }
+
+    func pitchDebugCameraDown() {
+        debugCameraState = cameraController.orbit(debugCameraState, deltaYaw: 0, deltaPitch: -0.10)
+    }
+
+    func panDebugCameraNorth() {
+        panDebugCamera(dx: 0, dz: cameraPanStep)
+    }
+
+    func panDebugCameraSouth() {
+        panDebugCamera(dx: 0, dz: -cameraPanStep)
+    }
+
+    func panDebugCameraEast() {
+        panDebugCamera(dx: cameraPanStep, dz: 0)
+    }
+
+    func panDebugCameraWest() {
+        panDebugCamera(dx: -cameraPanStep, dz: 0)
+    }
+
+    func resetDebugCamera() {
+        debugCameraState = cameraController.reset(bounds: nil)
+    }
+
+    func fitDebugCameraToTerrain() {
+        let bounds = debugTerrainMeshDescriptors.map(\.meshPayload.bounds)
+        debugCameraState = cameraController.reset(bounds: bounds.isEmpty ? nil : bounds)
     }
 
     private func move(dx: Int, dz: Int) {
@@ -269,7 +399,15 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         }
 
         centerChunkCoord = WorldChunkCoord(x: Int32(nextX), z: Int32(nextZ))
-        rebuild()
+        rebuild(fitCamera: true)
+    }
+
+    private var cameraPanStep: Float {
+        max(1, debugCameraState.orthographicScale * 0.12)
+    }
+
+    private func panDebugCamera(dx: Float, dz: Float) {
+        debugCameraState = cameraController.pan(debugCameraState, dx: dx, dz: dz)
     }
 
     private static func hashLabel(_ value: UInt64?) -> String {

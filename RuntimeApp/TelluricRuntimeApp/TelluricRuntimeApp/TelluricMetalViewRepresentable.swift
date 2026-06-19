@@ -1,11 +1,16 @@
+import Foundation
 import MetalKit
 import RenderCoreMetal
 import SwiftUI
 
 struct TelluricMetalViewRepresentable: NSViewRepresentable {
     let meshDescriptors: [MetalTerrainMeshDescriptor]
-    let meshHash: UInt64
+    let uploadHash: UInt64
+    let displayOptions: MetalDebugTerrainDisplayOptions
+    let cameraState: MetalDebugCameraState
+    let statsTick: Date
     @Binding var renderErrorMessage: String?
+    @Binding var frameStats: MetalDebugFrameStats
 
     func makeCoordinator() -> TelluricMetalDebugCoordinator {
         TelluricMetalDebugCoordinator()
@@ -19,8 +24,11 @@ struct TelluricMetalViewRepresentable: NSViewRepresentable {
         context.coordinator.update(
             view: nsView,
             meshDescriptors: meshDescriptors,
-            meshHash: meshHash,
-            renderErrorMessage: $renderErrorMessage
+            uploadHash: uploadHash,
+            displayOptions: displayOptions,
+            cameraState: cameraState,
+            renderErrorMessage: $renderErrorMessage,
+            frameStats: $frameStats
         )
     }
 }

@@ -49,7 +49,9 @@ public struct MetalTerrainMeshUploader {
                 color: debugColor(
                     heightMeters: vertex.heightMeters,
                     surface: vertex.surface,
-                    lifecycleState: descriptor.lifecycleState
+                    lifecycleState: descriptor.lifecycleState,
+                    colorMode: descriptor.colorMode,
+                    isSelected: descriptor.isSelected
                 )
             )
         }
@@ -60,17 +62,11 @@ public struct MetalTerrainMeshUploader {
         surface: TerrainSurfaceSample,
         lifecycleState: ChunkLifecycleState
     ) -> SIMD4<Float> {
-        let height01 = max(0, min(1, (heightMeters + 128) / 256))
-        let surfaceTint = color(for: surface.material)
-        let lifecycleTint = color(for: lifecycleState)
-        let color = mix(surfaceTint, lifecycleTint, amount: 0.55)
-        let brightness = 0.72 + height01 * 0.28
-
-        return SIMD4<Float>(
-            color.x * brightness,
-            color.y * brightness,
-            color.z * brightness,
-            1
+        debugColor(
+            heightMeters: heightMeters,
+            surface: surface,
+            lifecycleState: lifecycleState,
+            colorMode: .mixed
         )
     }
 
@@ -126,7 +122,7 @@ public struct MetalTerrainMeshUploader {
         )
     }
 
-    private static func color(for material: TerrainSurfaceMaterial) -> SIMD3<Float> {
+    static func color(for material: TerrainSurfaceMaterial) -> SIMD3<Float> {
         switch material {
         case .rock:
             return SIMD3<Float>(0.48, 0.48, 0.50)
@@ -147,7 +143,7 @@ public struct MetalTerrainMeshUploader {
         }
     }
 
-    private static func mix(
+    static func mix(
         _ lhs: SIMD3<Float>,
         _ rhs: SIMD3<Float>,
         amount: Float

@@ -46,6 +46,19 @@ final class MetalTerrainMeshUploaderTests: XCTestCase {
         XCTAssertEqual(resident.w, 1)
     }
 
+    func testSelectedDescriptorChangesDebugColor() throws {
+        let mesh = makeMeshPayload()
+        let normal = try MetalTerrainMeshUploader.makeMetalVertices(
+            descriptor: MetalTerrainMeshDescriptor(meshPayload: mesh, colorMode: .mixed)
+        )
+        let selected = try MetalTerrainMeshUploader.makeMetalVertices(
+            descriptor: MetalTerrainMeshDescriptor(meshPayload: mesh, colorMode: .mixed, isSelected: true)
+        )
+
+        XCTAssertEqual(normal.count, selected.count)
+        XCTAssertNotEqual(normal.first?.color, selected.first?.color)
+    }
+
     func testUploadCreatesMetalBuffersWhenDeviceIsAvailable() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("No Metal device available in this environment.")
