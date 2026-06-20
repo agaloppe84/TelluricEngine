@@ -97,7 +97,9 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     private let pipeline: ChunkBuildPipeline
     private let cameraController: MetalDebugCameraController
     private let debugWalkabilityConfig: TerrainWalkabilityConfig
+    private let sharedRuntimeScene: TelluricRuntimeSceneController?
     private var cache: InMemoryWorldCache
+    private var sceneSubscription: AnyCancellable?
 
     init(
         seed: UInt64 = 20_260_619,
@@ -110,17 +112,19 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             sampleRadiusChunks: 3,
             evictionRadiusChunks: 4
         ),
-        centerChunkCoord: WorldChunkCoord = WorldChunkCoord(x: 0, z: 0)
+        centerChunkCoord: WorldChunkCoord = WorldChunkCoord(x: 0, z: 0),
+        sceneController: TelluricRuntimeSceneController? = nil
     ) {
-        self.seed = seed
-        self.generatorVersion = generatorVersion
-        self.layout = layout
-        self.config = config
-        self.centerChunkCoord = centerChunkCoord
+        self.seed = sceneController?.seed ?? seed
+        self.generatorVersion = sceneController?.generatorVersion ?? generatorVersion
+        self.layout = sceneController?.layout ?? layout
+        self.config = sceneController?.config ?? config
+        self.centerChunkCoord = sceneController?.centerChunkCoord ?? centerChunkCoord
         self.planner = WorldResidencyPlanner()
         self.pipeline = ChunkBuildPipeline()
         self.cameraController = MetalDebugCameraController()
         self.cache = InMemoryWorldCache()
+        self.sharedRuntimeScene = sceneController
         self.debugTerrainColorMode = .mixed
         self.isWireframeEnabled = false
         self.showsBounds = false
@@ -140,7 +144,16 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         )
         self.debugCameraState = MetalDebugCameraState()
 
-        rebuild(fitCamera: true)
+        if let sceneController {
+            syncFromSharedRuntimeScene(updateCamera: true)
+            self.sceneSubscription = sceneController.objectWillChange.sink { [weak self] _ in
+                Task { @MainActor in
+                    self?.syncFromSharedRuntimeScene(updateCamera: false)
+                }
+            }
+        } else {
+            rebuild(fitCamera: true)
+        }
     }
 
     var centerLabel: String {
@@ -201,9 +214,14 @@ final class TelluricDebugRuntimeModel: ObservableObject {
                 isEnabled: showsPickedPoint
             ),
             probeMarker: MetalDebugProbeMarkerConfiguration(
-                isEnabled: showsPlayerProbe,
+                isEnabled: sharedRuntimeScene == nil && showsPlayerProbe,
                 radius: 3.5,
                 height: 20
+            ),
+            playerMarker: MetalDebugPlayerMarkerConfiguration(
+                isEnabled: sharedRuntimeScene != nil && showsPlayerProbe,
+                radius: 4.2,
+                height: 14
             )
         )
     }
@@ -242,6 +260,13 @@ final class TelluricDebugRuntimeModel: ObservableObject {
             y: playerProbe.worldPosition.y,
             z: playerProbe.worldPosition.z
         )
+    }
+
+    var runtimePlayerWorldPoint: MetalDebugWorldPoint? {
+        guard sharedRuntimeScene != nil else {
+            return nil
+        }
+        return playerProbeWorldPoint
     }
 
     var playerProbePositionLabel: String {
@@ -293,6 +318,10 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     var selectedChunkStatusLabel: String {
         selectedChunkLabel
+    }
+
+    var runtimeSceneModeLabel: String {
+        sharedRuntimeScene == nil ? "standalone debug scene" : "shared runtime scene"
     }
 
     var isCameraPossiblyEdgeOn: Bool {
@@ -404,6 +433,11 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     func rebuild() {
+        if let sharedRuntimeScene {
+            sharedRuntimeScene.rebuildWorldAroundPlayer()
+            syncFromSharedRuntimeScene(updateCamera: false)
+            return
+        }
         rebuild(fitCamera: false)
     }
 
@@ -454,6 +488,13 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     func reset() {
+        if let sharedRuntimeScene {
+            selectedChunkCoord = nil
+            terrainInspectionState = nil
+            sharedRuntimeScene.resetRuntimeSlice()
+            syncFromSharedRuntimeScene(updateCamera: true)
+            return
+        }
         centerChunkCoord = WorldChunkCoord(x: 0, z: 0)
         selectedChunkCoord = nil
         terrainInspectionState = nil
@@ -486,6 +527,11 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     func resetPlayerProbe() {
+        if let sharedRuntimeScene {
+            sharedRuntimeScene.resetPlayer()
+            syncFromSharedRuntimeScene(updateCamera: false)
+            return
+        }
         guard let terrain = makeTerrainQueryEngine() else {
             placePlayerProbe(
                 worldX: centerWorldX + Float(layout.chunkSampleSpan) * 0.5,
@@ -515,6 +561,15 @@ final class TelluricDebugRuntimeModel: ObservableObject {
 
     func movePlayerProbeToPickedPoint() {
         guard let pickedWorldPoint else {
+            return
+        }
+        if let sharedRuntimeScene {
+            sharedRuntimeScene.movePlayerTo(
+                worldX: pickedWorldPoint.position.x,
+                worldZ: pickedWorldPoint.position.z,
+                source: .keyboard
+            )
+            syncFromSharedRuntimeScene(updateCamera: false)
             return
         }
         placePlayerProbe(
@@ -639,6 +694,15 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     private func move(dx: Int, dz: Int) {
+        if let sharedRuntimeScene {
+            sharedRuntimeScene.movePlayer(
+                deltaX: Float(dx) * sharedRuntimeScene.chunkWorldSizeMeters,
+                deltaZ: Float(dz) * sharedRuntimeScene.chunkWorldSizeMeters,
+                source: .keyboard
+            )
+            syncFromSharedRuntimeScene(updateCamera: false)
+            return
+        }
         let nextX = Int(centerChunkCoord.x) + dx
         let nextZ = Int(centerChunkCoord.z) + dz
 
@@ -722,6 +786,15 @@ final class TelluricDebugRuntimeModel: ObservableObject {
     }
 
     private func movePlayerProbe(deltaX: Float, deltaZ: Float) {
+        if let sharedRuntimeScene {
+            sharedRuntimeScene.movePlayer(
+                deltaX: deltaX,
+                deltaZ: deltaZ,
+                source: .keyboard
+            )
+            syncFromSharedRuntimeScene(updateCamera: false)
+            return
+        }
         guard let terrain = makeTerrainQueryEngine() else {
             errorMessage = "No resident snapshot is available for terrain probe queries."
             return
@@ -746,6 +819,25 @@ final class TelluricDebugRuntimeModel: ObservableObject {
         )
         playerProbe = result.probe
         errorMessage = nil
+    }
+
+    private func syncFromSharedRuntimeScene(updateCamera: Bool) {
+        guard let sharedRuntimeScene else {
+            return
+        }
+
+        seed = sharedRuntimeScene.seed
+        centerChunkCoord = sharedRuntimeScene.centerChunkCoord
+        lastPlan = sharedRuntimeScene.lastPlan
+        lastBuildResult = sharedRuntimeScene.lastBuildResult
+        snapshot = sharedRuntimeScene.snapshot
+        playerProbe = sharedRuntimeScene.playerProbe
+        errorMessage = sharedRuntimeScene.errorMessage
+
+        if updateCamera {
+            currentCameraPreset = .custom
+            debugCameraState = sharedRuntimeScene.cameraState
+        }
     }
 
     private func makeReadableCameraState(preset: TelluricDebugCameraPreset) -> MetalDebugCameraState {

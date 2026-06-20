@@ -88,11 +88,17 @@ struct TelluricGameRuntimeView: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
+            Button("Close") {
+                model.setCameraMode(.playableCloseFollow)
+            }
             Button("Follow") {
                 model.setCameraMode(.followIso)
             }
             Button("Top") {
                 model.setCameraMode(.topDown)
+            }
+            Button("Focus player") {
+                model.focusCameraOnPlayer()
             }
             Button("Reset cam") {
                 model.resetCamera()

@@ -10,6 +10,7 @@ struct TelluricDebugStatusView: View {
                 .font(.headline)
 
             VStack(spacing: 7) {
+                statusRow("Scene", model.runtimeSceneModeLabel)
                 statusRow("Terrain meshes", "\(model.debugTerrainMeshCount)")
                 statusRow("Terrain visible", model.isTerrainVisible ? "yes" : "no")
                 statusRow("Probe visible", model.isProbeVisible ? "yes" : "no")

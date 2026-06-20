@@ -40,6 +40,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         guard let commandQueue = device.makeCommandQueue() else {
             throw MetalDebugRenderError.commandQueueCreationFailed
         }
+        commandQueue.label = "telluric-debug-render-command-queue"
         self.commandQueue = commandQueue
         self.uploader = MetalTerrainMeshUploader(device: device)
 
@@ -253,6 +254,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         framesSinceStatsPublish += 1
 
         var uniforms = MetalDebugUniforms(mvp: camera.viewProjectionMatrix(aspectRatio: aspectRatio))
+        commandBuffer.label = MetalDebugResourceLabels.commandBuffer(frameIndex: frameIndex)
+        encoder.label = MetalDebugResourceLabels.renderEncoder
 
         encoder.setRenderPipelineState(pipelineState)
         encoder.setDepthStencilState(depthStencilState)
@@ -263,6 +266,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             index: 1
         )
 
+        encoder.pushDebugGroup(MetalDebugResourceLabels.terrainDrawGroup)
         for mesh in meshBuffers {
             encoder.setVertexBuffer(mesh.vertexBuffer, offset: 0, index: 0)
             encoder.drawIndexedPrimitives(
@@ -273,14 +277,17 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 indexBufferOffset: 0
             )
         }
+        encoder.popDebugGroup()
 
         encoder.setTriangleFillMode(.fill)
+        encoder.pushDebugGroup(MetalDebugResourceLabels.debugLineDrawGroup)
         drawLineBuffers(boundsLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(normalLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(gridLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(pickedPointLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(probePointLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(playerPointLineBuffers, encoder: encoder, uniforms: &uniforms)
+        encoder.popDebugGroup()
 
         encoder.endEncoding()
         commandBuffer.present(drawable)
@@ -362,7 +369,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             throw MetalDebugRenderError.bufferAllocationFailed(debugName)
         }
 
-        vertexBuffer.label = debugName
+        vertexBuffer.label = MetalDebugResourceLabels.lineBuffer(debugName: debugName)
         return MetalDebugLineBuffers(
             vertexBuffer: vertexBuffer,
             vertexCount: vertices.count,

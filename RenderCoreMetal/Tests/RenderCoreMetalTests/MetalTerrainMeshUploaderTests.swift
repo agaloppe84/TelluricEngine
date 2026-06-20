@@ -88,6 +88,23 @@ final class MetalTerrainMeshUploaderTests: XCTestCase {
         XCTAssertEqual(game.first?.color.w, 1)
     }
 
+    func testNativeMetalDebugResourceLabelsAreStable() {
+        XCTAssertEqual(
+            MetalDebugResourceLabels.terrainVertexBuffer(debugName: "chunk-0-0"),
+            "chunk-0-0-terrain-vertices"
+        )
+        XCTAssertEqual(
+            MetalDebugResourceLabels.terrainIndexBuffer(debugName: "chunk-0-0"),
+            "chunk-0-0-terrain-indices"
+        )
+        XCTAssertEqual(
+            MetalDebugResourceLabels.commandBuffer(frameIndex: 7),
+            "telluric-debug-frame-7-command-buffer"
+        )
+        XCTAssertEqual(MetalDebugResourceLabels.terrainDrawGroup, "telluric terrain meshes")
+        XCTAssertEqual(MetalDebugResourceLabels.debugLineDrawGroup, "telluric debug line overlays")
+    }
+
     func testUploadCreatesMetalBuffersWhenDeviceIsAvailable() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("No Metal device available in this environment.")
@@ -103,6 +120,8 @@ final class MetalTerrainMeshUploaderTests: XCTestCase {
         XCTAssertEqual(result.buffers[0].vertexCount, mesh.vertices.count)
         XCTAssertEqual(result.buffers[0].indexCount, mesh.indices.count)
         XCTAssertEqual(result.buffers[0].meshStableHash, mesh.stableHash)
+        XCTAssertEqual(result.buffers[0].vertexBuffer.label, "chunk-0-0-terrain-vertices")
+        XCTAssertEqual(result.buffers[0].indexBuffer.label, "chunk-0-0-terrain-indices")
     }
 
     func testUploadRejectsEmptyMeshListWhenDeviceIsAvailable() throws {

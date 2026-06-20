@@ -100,6 +100,7 @@ struct TelluricRuntimeAppTests {
         #expect(RenderCoreMetalInfo.phase9Status == "terrain-query-player-probe-debug-marker")
         #expect(RenderCoreMetalInfo.phase9_5Status == "debug-runtime-usability-fix")
         #expect(RenderCoreMetalInfo.phase9_6Status == "playable-runtime-slice-debug-separation")
+        #expect(RenderCoreMetalInfo.phaseR1Status == "runtime-slice-recovery")
     }
 
     @Test func renderCoreMetalCPUConversionMatchesDebugMeshPayload() throws {
@@ -396,6 +397,8 @@ struct TelluricRuntimeAppTests {
         #expect(model.displayOptions.playerMarker.isEnabled)
         #expect(model.displayOptions.showsBounds == false)
         #expect(model.displayOptions.normals.isEnabled == false)
+        #expect(model.runtimeScene.hasVisibleTerrain)
+        #expect(model.runtimeScene.hasVisiblePlayer)
     }
 
     @Test func gamePlayerStartsGroundedAndWalkable() {
@@ -424,6 +427,7 @@ struct TelluricRuntimeAppTests {
         let model = TelluricGameRuntimeModel()
         let initialCenter = model.centerChunkCoord
         let initialHash = model.snapshot?.stableHash
+        let initialRebuildCount = model.rebuildCount
         let distance = Float(model.layout.chunkSampleSpan) + 2
 
         model.movePlayer(deltaX: distance, deltaZ: 0, source: .keyboard)
@@ -432,6 +436,8 @@ struct TelluricRuntimeAppTests {
         #expect(model.playerChunkCoord == model.centerChunkCoord)
         #expect(model.snapshot?.stableHash != initialHash)
         #expect(model.meshCount > 0)
+        #expect(model.rebuildCount > initialRebuildCount)
+        #expect(model.centerChunkChangeCount > 0)
     }
 
     @Test func gameKeyboardInputStateMutatesMovementIntent() {
@@ -462,6 +468,59 @@ struct TelluricRuntimeAppTests {
         #expect(model.meshCount > 0)
         #expect(model.residentChunkCount > 0)
         #expect(model.activeChunkCount > 0)
+    }
+
+    @Test func runtimeSceneWorldScaleIsStableAndDocumentedByModel() {
+        let model = TelluricRuntimeSceneController()
+
+        #expect(model.layout.samplesPerAxis == 33)
+        #expect(model.metersPerSample == 1)
+        #expect(model.chunkWorldSizeMeters == 32)
+        #expect(model.runtimeSceneState.worldScale.chunkWorldSizeMeters == model.chunkWorldSizeMeters)
+    }
+
+    @Test func gameDefaultCameraUsesPlayableCloseFollowInsteadOfFarFit() {
+        let model = TelluricRuntimeSceneController()
+
+        #expect(model.cameraMode == .playableCloseFollow)
+        #expect(model.cameraState.orthographicScale <= 72)
+        #expect(model.cameraState.distance <= 90)
+        #expect(model.cameraState.pitchRadians > 0.6)
+    }
+
+    @Test func playerMarkerIsVisibleByDefaultInGamePreview() {
+        let model = TelluricRuntimeSceneController()
+
+        #expect(model.displayOptions.renderMode == .gamePreview)
+        #expect(model.displayOptions.playerMarker.isEnabled)
+        #expect(model.displayOptions.playerMarker.radius >= 4)
+        #expect(model.displayOptions.playerMarker.height >= 14)
+        #expect(model.playerPoint.position.x == model.playerPosition.x)
+        #expect(model.playerPoint.position.z == model.playerPosition.z)
+    }
+
+    @Test func gameAndDebugShareTheSameRuntimeSceneSourceOfTruth() {
+        let scene = TelluricRuntimeSceneController()
+        let debug = TelluricDebugRuntimeModel(sceneController: scene)
+        let initialCenter = scene.centerChunkCoord
+
+        #expect(debug.snapshot?.stableHash == scene.snapshot?.stableHash)
+
+        debug.moveEast()
+
+        #expect(scene.centerChunkCoord != initialCenter)
+        #expect(debug.centerChunkCoord == scene.centerChunkCoord)
+        #expect(debug.snapshot?.stableHash == scene.snapshot?.stableHash)
+        #expect(debug.playerProbe?.worldPosition == scene.playerProbe?.worldPosition)
+    }
+
+    @Test func debugSharedModeUsesPlayerMarkerInsteadOfIndependentProbeMarker() {
+        let scene = TelluricRuntimeSceneController()
+        let debug = TelluricDebugRuntimeModel(sceneController: scene)
+
+        #expect(debug.debugDisplayOptions.playerMarker.isEnabled)
+        #expect(debug.debugDisplayOptions.probeMarker.isEnabled == false)
+        #expect(debug.runtimePlayerWorldPoint != nil)
     }
 
     private func makePickingResult(model: TelluricDebugRuntimeModel) throws -> MetalDebugPickingResult {

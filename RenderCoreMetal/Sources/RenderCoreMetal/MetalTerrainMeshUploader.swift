@@ -124,8 +124,8 @@ public struct MetalTerrainMeshUploader {
             throw MetalDebugRenderError.bufferAllocationFailed("\(descriptor.debugName)-indices")
         }
 
-        vertexBuffer.label = "\(descriptor.debugName)-terrain-vertices"
-        indexBuffer.label = "\(descriptor.debugName)-terrain-indices"
+        vertexBuffer.label = MetalDebugResourceLabels.terrainVertexBuffer(debugName: descriptor.debugName)
+        indexBuffer.label = MetalDebugResourceLabels.terrainIndexBuffer(debugName: descriptor.debugName)
 
         return MetalTerrainMeshBuffers(
             vertexBuffer: vertexBuffer,

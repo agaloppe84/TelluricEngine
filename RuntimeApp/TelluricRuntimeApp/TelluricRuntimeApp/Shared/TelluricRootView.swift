@@ -2,8 +2,14 @@ import SwiftUI
 
 struct TelluricRootView: View {
     @State private var mode: TelluricRuntimeMode = .defaultMode
-    @StateObject private var gameModel = TelluricGameRuntimeModel()
-    @StateObject private var debugModel = TelluricDebugRuntimeModel()
+    @StateObject private var runtimeScene: TelluricRuntimeSceneController
+    @StateObject private var debugModel: TelluricDebugRuntimeModel
+
+    init() {
+        let scene = TelluricRuntimeSceneController()
+        _runtimeScene = StateObject(wrappedValue: scene)
+        _debugModel = StateObject(wrappedValue: TelluricDebugRuntimeModel(sceneController: scene))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,7 +36,7 @@ struct TelluricRootView: View {
 
             switch mode {
             case .game:
-                TelluricGameRuntimeView(model: gameModel)
+                TelluricGameRuntimeView(model: runtimeScene)
             case .debug:
                 TelluricDebugDashboardView(model: debugModel)
             }

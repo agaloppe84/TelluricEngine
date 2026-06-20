@@ -8,13 +8,13 @@ public struct MetalDebugPlayerMarkerConfiguration: Sendable, Hashable {
 
     public init(
         isEnabled: Bool = true,
-        radius: Float = 2.6,
-        height: Float = 9.0,
+        radius: Float = 4.2,
+        height: Float = 14.0,
         color: SIMD4<Float> = SIMD4<Float>(1.0, 0.92, 0.12, 1.0)
     ) {
         self.isEnabled = isEnabled
-        self.radius = radius.isFinite ? max(radius, 0.2) : 2.6
-        self.height = height.isFinite ? max(height, 0.5) : 9.0
+        self.radius = radius.isFinite ? max(radius, 0.2) : 4.2
+        self.height = height.isFinite ? max(height, 0.5) : 14.0
         self.color = color
     }
 

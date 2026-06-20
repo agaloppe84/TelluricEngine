@@ -11,11 +11,16 @@ final class TelluricGameRuntimeModel: ObservableObject {
     @Published private(set) var centerChunkCoord: WorldChunkCoord
     @Published private(set) var playerChunkCoord: WorldChunkCoord
     @Published private(set) var snapshot: ResidentWorldSnapshot?
+    @Published private(set) var lastResidencyRequest: WorldResidencyRequest?
     @Published private(set) var lastPlan: WorldResidencyPlan?
     @Published private(set) var lastBuildResult: ChunkBuildResult?
     @Published private(set) var cameraState: MetalDebugCameraState
     @Published private(set) var cameraMode: TelluricGameCameraMode
     @Published private(set) var lastInputSource: TelluricGameInputSource
+    @Published private(set) var lastInputState: TelluricGameInputState
+    @Published private(set) var playerProbe: TerrainProbe?
+    @Published private(set) var rebuildCount: Int
+    @Published private(set) var centerChunkChangeCount: Int
     @Published private(set) var errorMessage: String?
 
     let seed: UInt64
@@ -33,7 +38,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
     init(
         seed: UInt64 = 20_260_696,
         generatorVersion: TerrainGeneratorVersion = .phase1,
-        layout: TerrainChunkLayout = TerrainChunkLayout(samplesPerAxis: 17),
+        layout: TerrainChunkLayout = TerrainChunkLayout(samplesPerAxis: 33),
         profile: TerrainGenerationProfile = .debugPlayable,
         config: WorldResidencyConfig = WorldResidencyConfig(
             activeRadiusChunks: 0,
@@ -42,9 +47,9 @@ final class TelluricGameRuntimeModel: ObservableObject {
             sampleRadiusChunks: 3,
             evictionRadiusChunks: 4
         ),
-        startX: Float = 8,
-        startZ: Float = 8,
-        playerStepMeters: Float = 1.5
+        startX: Float = 16,
+        startZ: Float = 16,
+        playerStepMeters: Float = 4
     ) {
         self.seed = seed
         self.generatorVersion = generatorVersion
@@ -58,12 +63,16 @@ final class TelluricGameRuntimeModel: ObservableObject {
         let chunkCoord = Self.chunkCoord(forWorldX: startX, worldZ: startZ, layout: layout)
         self.centerChunkCoord = chunkCoord
         self.playerChunkCoord = chunkCoord
-        self.cameraMode = .followIso
+        self.cameraMode = .playableCloseFollow
         self.lastInputSource = .none
+        self.lastInputState = .idle
+        self.playerProbe = nil
+        self.rebuildCount = 0
+        self.centerChunkChangeCount = 0
         self.cameraState = Self.makeCameraState(
-            mode: .followIso,
+            mode: .playableCloseFollow,
             playerPosition: TerrainWorldPosition(x: startX, y: 0, z: startZ),
-            orthographicScale: 72
+            orthographicScale: TelluricRuntimeWorldScale.playableCloseFollowScale(for: layout)
         )
 
         rebuildWorldAroundPlayer()
@@ -72,7 +81,58 @@ final class TelluricGameRuntimeModel: ObservableObject {
     }
 
     var displayOptions: MetalDebugTerrainDisplayOptions {
-        .gamePreview
+        MetalDebugTerrainDisplayOptions(
+            colorMode: .surface,
+            renderMode: .gamePreview,
+            isWireframeEnabled: false,
+            showsBounds: false,
+            verticalScale: 1,
+            normals: MetalDebugNormalsConfiguration(isEnabled: false),
+            grid: MetalDebugGridConfiguration(isEnabled: false),
+            pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false),
+            probeMarker: MetalDebugProbeMarkerConfiguration(isEnabled: false),
+            playerMarker: MetalDebugPlayerMarkerConfiguration(
+                isEnabled: true,
+                radius: 4.2,
+                height: 14
+            )
+        )
+    }
+
+    var runtimeScene: TelluricRuntimeScene {
+        TelluricRuntimeScene(state: runtimeSceneState)
+    }
+
+    var runtimeSceneState: TelluricRuntimeSceneState {
+        TelluricRuntimeSceneState(
+            playerPosition: playerPosition,
+            playerWalkability: playerWalkability,
+            isGrounded: isGrounded,
+            centerChunkCoord: centerChunkCoord,
+            playerChunkCoord: playerChunkCoord,
+            lastResidencyRequest: lastResidencyRequest,
+            lastPlan: lastPlan,
+            lastBuildResult: lastBuildResult,
+            snapshot: snapshot,
+            cameraState: cameraState,
+            inputState: lastInputState,
+            renderMeshDescriptors: meshDescriptors,
+            worldScale: worldScale,
+            rebuildCount: rebuildCount,
+            centerChunkChangeCount: centerChunkChangeCount
+        )
+    }
+
+    var worldScale: TelluricRuntimeWorldScale {
+        TelluricRuntimeWorldScale(layout: layout)
+    }
+
+    var chunkWorldSizeMeters: Float {
+        worldScale.chunkWorldSizeMeters
+    }
+
+    var metersPerSample: Float {
+        worldScale.metersPerSample
     }
 
     var meshDescriptors: [MetalTerrainMeshDescriptor] {
@@ -125,6 +185,10 @@ final class TelluricGameRuntimeModel: ObservableObject {
         snapshot?.stats.activeRecords ?? 0
     }
 
+    var visibleMeshChunkCount: Int {
+        meshCount
+    }
+
     var playerPositionLabel: String {
         String(
             format: "%.2f, %.2f, %.2f",
@@ -152,6 +216,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
     func applyKeyboardInput(_ input: TelluricGameInputState) {
         guard input.hasMovement else {
             lastInputSource = .keyboard
+            lastInputState = TelluricGameInputState(moveX: 0, moveZ: 0, source: .keyboard)
             return
         }
         movePlayer(input: input)
@@ -178,7 +243,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
     }
 
     func resetCamera() {
-        cameraMode = .followIso
+        cameraMode = .playableCloseFollow
         updateCameraForPlayer()
     }
 
@@ -207,6 +272,11 @@ final class TelluricGameRuntimeModel: ObservableObject {
         cameraState = cameraController.orbit(cameraState, deltaYaw: 0.16, deltaPitch: 0)
     }
 
+    func focusCameraOnPlayer() {
+        cameraMode = .playableCloseFollow
+        updateCameraForPlayer()
+    }
+
     private func movePlayer(input: TelluricGameInputState) {
         let length = max(0.0001, (input.moveX * input.moveX + input.moveZ * input.moveZ).squareRoot())
         let dx = input.moveX / length * playerStepMeters
@@ -220,13 +290,39 @@ final class TelluricGameRuntimeModel: ObservableObject {
         let targetChunk = Self.chunkCoord(forWorldX: targetX, worldZ: targetZ, layout: layout)
         if targetChunk != centerChunkCoord {
             centerChunkCoord = targetChunk
+            centerChunkChangeCount += 1
             rebuildWorldAroundPlayer()
         }
 
         snapPlayerToTerrain(worldX: targetX, worldZ: targetZ)
         lastInputSource = source
+        lastInputState = TelluricGameInputState(moveX: deltaX, moveZ: deltaZ, source: source)
         updateCenterIfNeeded()
         updateCameraForPlayer()
+    }
+
+    func movePlayerTo(worldX: Float, worldZ: Float, source: TelluricGameInputSource) {
+        let targetChunk = Self.chunkCoord(forWorldX: worldX, worldZ: worldZ, layout: layout)
+        if targetChunk != centerChunkCoord {
+            centerChunkCoord = targetChunk
+            centerChunkChangeCount += 1
+            rebuildWorldAroundPlayer()
+        }
+        snapPlayerToTerrain(worldX: worldX, worldZ: worldZ)
+        lastInputSource = source
+        lastInputState = TelluricGameInputState(moveX: 0, moveZ: 0, source: source)
+        updateCenterIfNeeded()
+        updateCameraForPlayer()
+    }
+
+    func resetRuntimeSlice() {
+        centerChunkCoord = WorldChunkCoord(x: 0, z: 0)
+        playerChunkCoord = centerChunkCoord
+        centerChunkChangeCount = 0
+        rebuildCount = 0
+        rebuildWorldAroundPlayer()
+        resetPlayer()
+        resetCamera()
     }
 
     private func snapPlayerToTerrain(worldX: Float, worldZ: Float) {
@@ -241,6 +337,13 @@ final class TelluricGameRuntimeModel: ObservableObject {
         playerPosition = result.worldPosition
         playerWalkability = result.walkability
         isGrounded = result.isInsideKnownTerrain
+        playerProbe = TerrainProbe(
+            id: 1,
+            worldPosition: result.worldPosition,
+            lastQueryResult: result,
+            isGrounded: result.isInsideKnownTerrain,
+            walkability: result.walkability
+        )
         playerChunkCoord = Self.chunkCoord(forWorldX: worldX, worldZ: worldZ, layout: layout)
     }
 
@@ -250,10 +353,11 @@ final class TelluricGameRuntimeModel: ObservableObject {
             return
         }
         centerChunkCoord = nextCenter
+        centerChunkChangeCount += 1
         rebuildWorldAroundPlayer()
     }
 
-    private func rebuildWorldAroundPlayer() {
+    func rebuildWorldAroundPlayer() {
         do {
             let request = WorldResidencyRequest(
                 worldSeed: WorldSeed(seed),
@@ -270,9 +374,11 @@ final class TelluricGameRuntimeModel: ObservableObject {
             )
             let plan = try planner.makePlan(request)
             let result = try pipeline.apply(plan: plan, cache: &cache)
+            lastResidencyRequest = request
             lastPlan = plan
             lastBuildResult = result
             snapshot = result.snapshot
+            rebuildCount += 1
             errorMessage = nil
         } catch {
             errorMessage = String(describing: error)
@@ -305,13 +411,24 @@ final class TelluricGameRuntimeModel: ObservableObject {
             playerPosition.y,
             playerPosition.z
         )
-        let scale = max(36, min(orthographicScale, 220))
+        let scale = max(26, min(orthographicScale, 112))
 
         switch mode {
+        case .playableCloseFollow:
+            return MetalDebugCameraState(
+                target: target,
+                distance: max(scale * 1.25, 58),
+                yawRadians: Float.pi * 0.25,
+                pitchRadians: 0.78,
+                zoomScale: 1,
+                orthographicScale: scale,
+                nearZ: 0.1,
+                farZ: max(scale * 7, 1_200)
+            )
         case .followIso:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.8, 110),
+                distance: max(scale * 1.55, 86),
                 yawRadians: Float.pi * 0.25,
                 pitchRadians: 0.62,
                 zoomScale: 1,
@@ -322,7 +439,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
         case .topDown:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.7, 110),
+                distance: max(scale * 1.35, 74),
                 yawRadians: 0,
                 pitchRadians: 1.28,
                 zoomScale: 1,
@@ -333,7 +450,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
         case .freeOrbit:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.8, 110),
+                distance: max(scale * 1.55, 86),
                 yawRadians: Float.pi * 0.25,
                 pitchRadians: 0.62,
                 zoomScale: 1,

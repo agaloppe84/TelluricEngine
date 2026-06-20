@@ -59,6 +59,8 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         XCTAssertFalse(options.grid.isEnabled)
         XCTAssertFalse(options.probeMarker.isEnabled)
         XCTAssertTrue(options.playerMarker.isEnabled)
+        XCTAssertGreaterThanOrEqual(options.playerMarker.radius, 4)
+        XCTAssertGreaterThanOrEqual(options.playerMarker.height, 14)
         XCTAssertEqual(options.verticalScale, 1)
     }
 
