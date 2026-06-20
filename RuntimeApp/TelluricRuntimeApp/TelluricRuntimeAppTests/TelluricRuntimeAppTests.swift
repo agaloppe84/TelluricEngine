@@ -101,6 +101,7 @@ struct TelluricRuntimeAppTests {
         #expect(RenderCoreMetalInfo.phase9_5Status == "debug-runtime-usability-fix")
         #expect(RenderCoreMetalInfo.phase9_6Status == "playable-runtime-slice-debug-separation")
         #expect(RenderCoreMetalInfo.phaseR1Status == "runtime-slice-recovery")
+        #expect(RenderCoreMetalInfo.phaseR2Status == "runtime-cleanup-vertical-slice")
     }
 
     @Test func renderCoreMetalCPUConversionMatchesDebugMeshPayload() throws {
@@ -382,9 +383,9 @@ struct TelluricRuntimeAppTests {
         #expect(model.debugCameraState.target != orbited.target)
     }
 
-    @Test func defaultRuntimeModeIsGameAndDebugRemainsAvailable() {
+    @Test func gameViewIsDefaultAndDebugDashboardIsNotPrimary() {
         #expect(TelluricRuntimeMode.defaultMode == .game)
-        #expect(TelluricRuntimeMode.allCases.contains(.debug))
+        #expect(TelluricRootView.usesSeparateDebugDashboard == false)
     }
 
     @Test func gameModelBuildsInitialPlayableSnapshot() {
@@ -397,6 +398,7 @@ struct TelluricRuntimeAppTests {
         #expect(model.displayOptions.playerMarker.isEnabled)
         #expect(model.displayOptions.showsBounds == false)
         #expect(model.displayOptions.normals.isEnabled == false)
+        #expect(model.isDebugOverlayEnabled == false)
         #expect(model.runtimeScene.hasVisibleTerrain)
         #expect(model.runtimeScene.hasVisiblePlayer)
     }
@@ -438,6 +440,10 @@ struct TelluricRuntimeAppTests {
         #expect(model.meshCount > 0)
         #expect(model.rebuildCount > initialRebuildCount)
         #expect(model.centerChunkChangeCount > 0)
+        #expect(model.lastStreamingUpdate.keptChunkCount > 0)
+        #expect(model.lastStreamingUpdate.addedChunkCount > 0)
+        #expect(model.lastStreamingUpdate.evictedChunkCount > 0)
+        #expect(model.lastStreamingUpdate.isFullRebuild == false)
     }
 
     @Test func gameKeyboardInputStateMutatesMovementIntent() {
@@ -476,6 +482,8 @@ struct TelluricRuntimeAppTests {
         #expect(model.layout.samplesPerAxis == 33)
         #expect(model.metersPerSample == 1)
         #expect(model.chunkWorldSizeMeters == 32)
+        #expect(model.worldScale.chunkSizeMeters == 32)
+        #expect(model.worldScale.playerHeightMeters >= 1.8)
         #expect(model.runtimeSceneState.worldScale.chunkWorldSizeMeters == model.chunkWorldSizeMeters)
     }
 
@@ -483,8 +491,8 @@ struct TelluricRuntimeAppTests {
         let model = TelluricRuntimeSceneController()
 
         #expect(model.cameraMode == .playableCloseFollow)
-        #expect(model.cameraState.orthographicScale <= 72)
-        #expect(model.cameraState.distance <= 90)
+        #expect(model.cameraState.orthographicScale <= 44)
+        #expect(model.cameraState.distance <= 50)
         #expect(model.cameraState.pitchRadians > 0.6)
     }
 
@@ -493,10 +501,29 @@ struct TelluricRuntimeAppTests {
 
         #expect(model.displayOptions.renderMode == .gamePreview)
         #expect(model.displayOptions.playerMarker.isEnabled)
-        #expect(model.displayOptions.playerMarker.radius >= 4)
-        #expect(model.displayOptions.playerMarker.height >= 14)
+        #expect(model.displayOptions.playerMarker.radius >= model.worldScale.playerRadiusMeters * 5)
+        #expect(model.displayOptions.playerMarker.height >= model.worldScale.playerHeightMeters * 3)
         #expect(model.playerPoint.position.x == model.playerPosition.x)
         #expect(model.playerPoint.position.z == model.playerPosition.z)
+    }
+
+    @Test func runtimeDebugOverlayIsOptionalAndUsesSameGameScene() {
+        let model = TelluricRuntimeSceneController()
+
+        #expect(model.runtimeSceneState.isDebugOverlayEnabled == false)
+        #expect(model.displayOptions.isWireframeEnabled == false)
+        #expect(model.displayOptions.showsBounds == false)
+        #expect(model.displayOptions.normals.isEnabled == false)
+
+        model.toggleWireframe()
+        model.toggleBounds()
+        model.toggleNormals()
+
+        #expect(model.runtimeSceneState.isDebugOverlayEnabled)
+        #expect(model.displayOptions.isWireframeEnabled)
+        #expect(model.displayOptions.showsBounds)
+        #expect(model.displayOptions.normals.isEnabled)
+        #expect(model.runtimeSceneState.snapshot?.stableHash == model.snapshot?.stableHash)
     }
 
     @Test func gameAndDebugShareTheSameRuntimeSceneSourceOfTruth() {

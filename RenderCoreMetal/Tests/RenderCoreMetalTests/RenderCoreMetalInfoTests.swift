@@ -12,5 +12,6 @@ final class RenderCoreMetalInfoTests: XCTestCase {
         XCTAssertEqual(RenderCoreMetalInfo.phase9_5Status, "debug-runtime-usability-fix")
         XCTAssertEqual(RenderCoreMetalInfo.phase9_6Status, "playable-runtime-slice-debug-separation")
         XCTAssertEqual(RenderCoreMetalInfo.phaseR1Status, "runtime-slice-recovery")
+        XCTAssertEqual(RenderCoreMetalInfo.phaseR2Status, "runtime-cleanup-vertical-slice")
     }
 }

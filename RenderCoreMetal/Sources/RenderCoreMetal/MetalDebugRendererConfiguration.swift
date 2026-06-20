@@ -8,7 +8,7 @@ public struct MetalDebugRendererConfiguration {
     public init(
         colorPixelFormat: MTLPixelFormat = .bgra8Unorm,
         depthPixelFormat: MTLPixelFormat = .depth32Float,
-        clearColor: MTLClearColor = MTLClearColor(red: 0.06, green: 0.07, blue: 0.08, alpha: 1)
+        clearColor: MTLClearColor = MTLClearColor(red: 0.10, green: 0.12, blue: 0.145, alpha: 1)
     ) {
         self.colorPixelFormat = colorPixelFormat
         self.depthPixelFormat = depthPixelFormat

@@ -17,11 +17,13 @@ struct TelluricGameHUDView: View {
             row("Active", "\(model.activeChunkCount)")
             row("Rebuilds", "\(model.rebuildCount)")
             row("Center Δ", "\(model.centerChunkChangeCount)")
+            row("Stream", model.streamingUpdateLabel)
             row("Chunk m", String(format: "%.0f", Double(model.chunkWorldSizeMeters)))
             row("Ground", model.isGrounded ? "yes" : "no")
             row("Walk", model.walkabilityLabel)
             row("Input", model.lastInputSource.label)
             row("Pad", controllerStatus)
+            row("Debug", model.debugOverlayStatusLabel)
         }
         .font(.caption2.monospacedDigit())
         .padding(10)

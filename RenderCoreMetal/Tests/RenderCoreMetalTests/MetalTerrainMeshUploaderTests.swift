@@ -136,10 +136,66 @@ final class MetalTerrainMeshUploaderTests: XCTestCase {
         }
     }
 
-    private func makeMeshPayload() -> TerrainMeshPayload {
+    func testBufferCacheReusesUnchangedMeshWhenDeviceIsAvailable() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("No Metal device available in this environment.")
+        }
+
+        let cache = MetalTerrainBufferCache(device: device)
+        let descriptor = MetalTerrainMeshDescriptor(meshPayload: makeMeshPayload())
+
+        let first = try cache.update(descriptors: [descriptor], verticalScale: 1)
+        let second = try cache.update(descriptors: [descriptor], verticalScale: 1)
+
+        XCTAssertEqual(first.createdCount, 1)
+        XCTAssertEqual(first.reusedCount, 0)
+        XCTAssertEqual(second.createdCount, 0)
+        XCTAssertEqual(second.reusedCount, 1)
+        XCTAssertTrue(first.buffers[0].vertexBuffer === second.buffers[0].vertexBuffer)
+        XCTAssertTrue(first.buffers[0].indexBuffer === second.buffers[0].indexBuffer)
+    }
+
+    func testBufferCacheCreatesNewBuffersWhenDescriptorChanges() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("No Metal device available in this environment.")
+        }
+
+        let cache = MetalTerrainBufferCache(device: device)
+        let mesh = makeMeshPayload()
+        let normal = MetalTerrainMeshDescriptor(meshPayload: mesh, isSelected: false)
+        let selected = MetalTerrainMeshDescriptor(meshPayload: mesh, isSelected: true)
+
+        _ = try cache.update(descriptors: [normal], verticalScale: 1)
+        let changed = try cache.update(descriptors: [selected], verticalScale: 1)
+
+        XCTAssertEqual(changed.createdCount, 1)
+        XCTAssertEqual(changed.reusedCount, 0)
+        XCTAssertEqual(changed.evictedCount, 1)
+    }
+
+    func testBufferCacheEvictsRemovedChunkWhenDeviceIsAvailable() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("No Metal device available in this environment.")
+        }
+
+        let cache = MetalTerrainBufferCache(device: device)
+        let first = MetalTerrainMeshDescriptor(meshPayload: makeMeshPayload(chunkCoord: ChunkCoord(x: 0, z: 0)))
+        let second = MetalTerrainMeshDescriptor(meshPayload: makeMeshPayload(chunkCoord: ChunkCoord(x: 1, z: 0)))
+
+        _ = try cache.update(descriptors: [first, second], verticalScale: 1)
+        let update = try cache.update(descriptors: [second], verticalScale: 1)
+
+        XCTAssertEqual(update.createdCount, 0)
+        XCTAssertEqual(update.reusedCount, 1)
+        XCTAssertEqual(update.evictedCount, 1)
+        XCTAssertEqual(cache.cachedBufferCount, 1)
+        XCTAssertEqual(update.buffers.first?.debugName, second.debugName)
+    }
+
+    private func makeMeshPayload(chunkCoord: ChunkCoord = ChunkCoord(x: 0, z: 0)) -> TerrainMeshPayload {
         let samplePayload = TerrainChunkSampler.makePayload(
             worldSeed: WorldSeed(42),
-            chunkCoord: ChunkCoord(x: 0, z: 0),
+            chunkCoord: chunkCoord,
             generatorVersion: .phase1,
             layout: TerrainChunkLayout(samplesPerAxis: 5)
         )

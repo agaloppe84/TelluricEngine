@@ -21,6 +21,12 @@ final class TelluricGameRuntimeModel: ObservableObject {
     @Published private(set) var playerProbe: TerrainProbe?
     @Published private(set) var rebuildCount: Int
     @Published private(set) var centerChunkChangeCount: Int
+    @Published private(set) var lastStreamingUpdate: TelluricRuntimeStreamingUpdateSummary
+    @Published var isDebugOverlayEnabled: Bool
+    @Published var isWireframeEnabled: Bool
+    @Published var showsBounds: Bool
+    @Published var showsNormals: Bool
+    @Published var showsChunkGrid: Bool
     @Published private(set) var errorMessage: String?
 
     let seed: UInt64
@@ -69,6 +75,12 @@ final class TelluricGameRuntimeModel: ObservableObject {
         self.playerProbe = nil
         self.rebuildCount = 0
         self.centerChunkChangeCount = 0
+        self.lastStreamingUpdate = TelluricRuntimeStreamingUpdateSummary(currentCenterChunkCoord: chunkCoord)
+        self.isDebugOverlayEnabled = false
+        self.isWireframeEnabled = false
+        self.showsBounds = false
+        self.showsNormals = false
+        self.showsChunkGrid = false
         self.cameraState = Self.makeCameraState(
             mode: .playableCloseFollow,
             playerPosition: TerrainWorldPosition(x: startX, y: 0, z: startZ),
@@ -81,20 +93,25 @@ final class TelluricGameRuntimeModel: ObservableObject {
     }
 
     var displayOptions: MetalDebugTerrainDisplayOptions {
-        MetalDebugTerrainDisplayOptions(
+        let worldScale = worldScale
+        return MetalDebugTerrainDisplayOptions(
             colorMode: .surface,
             renderMode: .gamePreview,
-            isWireframeEnabled: false,
-            showsBounds: false,
-            verticalScale: 1,
-            normals: MetalDebugNormalsConfiguration(isEnabled: false),
-            grid: MetalDebugGridConfiguration(isEnabled: false),
+            isWireframeEnabled: isDebugOverlayEnabled && isWireframeEnabled,
+            showsBounds: isDebugOverlayEnabled && showsBounds,
+            verticalScale: worldScale.renderVerticalScale,
+            normals: MetalDebugNormalsConfiguration(
+                isEnabled: isDebugOverlayEnabled && showsNormals,
+                stride: 8,
+                length: max(1.4, worldScale.playerHeightMeters * 1.2)
+            ),
+            grid: MetalDebugGridConfiguration(isEnabled: isDebugOverlayEnabled && showsChunkGrid),
             pickedPointMarker: MetalDebugPickedPointMarkerConfiguration(isEnabled: false),
             probeMarker: MetalDebugProbeMarkerConfiguration(isEnabled: false),
             playerMarker: MetalDebugPlayerMarkerConfiguration(
                 isEnabled: true,
-                radius: 4.2,
-                height: 14
+                radius: max(2.4, worldScale.playerRadiusMeters * 6),
+                height: max(6.5, worldScale.playerHeightMeters * 4)
             )
         )
     }
@@ -119,7 +136,9 @@ final class TelluricGameRuntimeModel: ObservableObject {
             renderMeshDescriptors: meshDescriptors,
             worldScale: worldScale,
             rebuildCount: rebuildCount,
-            centerChunkChangeCount: centerChunkChangeCount
+            centerChunkChangeCount: centerChunkChangeCount,
+            streamingUpdateSummary: lastStreamingUpdate,
+            isDebugOverlayEnabled: isDebugOverlayEnabled
         )
     }
 
@@ -211,6 +230,38 @@ final class TelluricGameRuntimeModel: ObservableObject {
             return "outside"
         }
         return playerWalkability.isWalkable ? "walkable" : "\(playerWalkability.reason)"
+    }
+
+    var streamingUpdateLabel: String {
+        lastStreamingUpdate.label
+    }
+
+    var debugOverlayStatusLabel: String {
+        isDebugOverlayEnabled ? "on" : "off"
+    }
+
+    func toggleDebugOverlay() {
+        isDebugOverlayEnabled.toggle()
+    }
+
+    func toggleWireframe() {
+        isDebugOverlayEnabled = true
+        isWireframeEnabled.toggle()
+    }
+
+    func toggleBounds() {
+        isDebugOverlayEnabled = true
+        showsBounds.toggle()
+    }
+
+    func toggleNormals() {
+        isDebugOverlayEnabled = true
+        showsNormals.toggle()
+    }
+
+    func toggleChunkGrid() {
+        isDebugOverlayEnabled = true
+        showsChunkGrid.toggle()
     }
 
     func applyKeyboardInput(_ input: TelluricGameInputState) {
@@ -320,6 +371,7 @@ final class TelluricGameRuntimeModel: ObservableObject {
         playerChunkCoord = centerChunkCoord
         centerChunkChangeCount = 0
         rebuildCount = 0
+        lastStreamingUpdate = TelluricRuntimeStreamingUpdateSummary(currentCenterChunkCoord: centerChunkCoord)
         rebuildWorldAroundPlayer()
         resetPlayer()
         resetCamera()
@@ -359,6 +411,8 @@ final class TelluricGameRuntimeModel: ObservableObject {
 
     func rebuildWorldAroundPlayer() {
         do {
+            let previousChunkIDs = Set(cache.records.map(\.chunkID))
+            let previousCenter = lastResidencyRequest?.centerChunkCoord
             let request = WorldResidencyRequest(
                 worldSeed: WorldSeed(seed),
                 generatorVersion: generatorVersion,
@@ -374,10 +428,18 @@ final class TelluricGameRuntimeModel: ObservableObject {
             )
             let plan = try planner.makePlan(request)
             let result = try pipeline.apply(plan: plan, cache: &cache)
+            let currentChunkIDs = Set(result.snapshot.records.map(\.chunkID))
             lastResidencyRequest = request
             lastPlan = plan
             lastBuildResult = result
             snapshot = result.snapshot
+            lastStreamingUpdate = TelluricRuntimeStreamingUpdateSummary(
+                previousCenterChunkCoord: previousCenter,
+                currentCenterChunkCoord: centerChunkCoord,
+                previousChunkIDs: previousChunkIDs,
+                currentChunkIDs: currentChunkIDs,
+                mutationSummary: result.mutationSummary
+            )
             rebuildCount += 1
             errorMessage = nil
         } catch {
@@ -417,46 +479,46 @@ final class TelluricGameRuntimeModel: ObservableObject {
         case .playableCloseFollow:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.25, 58),
+                distance: max(scale * 1.05, 42),
                 yawRadians: Float.pi * 0.25,
-                pitchRadians: 0.78,
+                pitchRadians: 0.72,
                 zoomScale: 1,
                 orthographicScale: scale,
                 nearZ: 0.1,
-                farZ: max(scale * 7, 1_200)
+                farZ: max(scale * 5, 700)
             )
         case .followIso:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.55, 86),
+                distance: max(scale * 1.25, 58),
                 yawRadians: Float.pi * 0.25,
                 pitchRadians: 0.62,
                 zoomScale: 1,
                 orthographicScale: scale,
                 nearZ: 0.1,
-                farZ: max(scale * 10, 2_000)
+                farZ: max(scale * 7, 1_000)
             )
         case .topDown:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.35, 74),
+                distance: max(scale * 1.18, 54),
                 yawRadians: 0,
                 pitchRadians: 1.28,
                 zoomScale: 1,
                 orthographicScale: scale,
                 nearZ: 0.1,
-                farZ: max(scale * 10, 2_000)
+                farZ: max(scale * 7, 1_000)
             )
         case .freeOrbit:
             return MetalDebugCameraState(
                 target: target,
-                distance: max(scale * 1.55, 86),
+                distance: max(scale * 1.25, 58),
                 yawRadians: Float.pi * 0.25,
                 pitchRadians: 0.62,
                 zoomScale: 1,
                 orthographicScale: scale,
                 nearZ: 0.1,
-                farZ: max(scale * 10, 2_000)
+                farZ: max(scale * 7, 1_000)
             )
         }
     }

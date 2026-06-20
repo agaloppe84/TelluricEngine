@@ -14,7 +14,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     private let pipelineState: MTLRenderPipelineState
     private let linePipelineState: MTLRenderPipelineState
     private let depthStencilState: MTLDepthStencilState
-    private let uploader: MetalTerrainMeshUploader
+    private let bufferCache: MetalTerrainBufferCache
     private var meshBuffers: [MetalTerrainMeshBuffers] = []
     private var camera = MetalDebugCamera()
     private var displayOptions = MetalDebugTerrainDisplayOptions.default
@@ -42,7 +42,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         }
         commandQueue.label = "telluric-debug-render-command-queue"
         self.commandQueue = commandQueue
-        self.uploader = MetalTerrainMeshUploader(device: device)
+        self.bufferCache = MetalTerrainBufferCache(device: device)
 
         let library = try Self.makeShaderLibrary(device: device)
         let vertexFunction = library.makeFunction(name: "telluric_debug_terrain_vertex")
@@ -151,7 +151,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 debugName: descriptor.debugName
             )
         }
-        let result = try uploader.upload(
+        let result = try bufferCache.update(
             descriptors: effectiveDescriptors,
             verticalScale: displayOptions.verticalScale
         )
@@ -224,6 +224,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
 
     public func clearMeshes() {
         meshBuffers = []
+        bufferCache.removeAll()
         camera = MetalDebugCamera()
         boundsLineBuffers = nil
         normalLineBuffers = nil

@@ -56,6 +56,13 @@ struct TelluricGameRuntimeView: View {
                     controllerStatus: controllerInput.statusLabel
                 )
 
+                if model.isDebugOverlayEnabled {
+                    TelluricRuntimeDebugOverlayView(
+                        model: model,
+                        frameStats: frameStats
+                    )
+                }
+
                 if let message = renderErrorMessage ?? model.errorMessage {
                     Text(message)
                         .font(.caption)
@@ -77,7 +84,7 @@ struct TelluricGameRuntimeView: View {
             }
             .padding(14)
         }
-        .background(Color.black)
+        .background(Color(red: 0.10, green: 0.12, blue: 0.145))
         .onAppear {
             controllerInput.onMoveVector = { x, z in
                 model.applyControllerInput(moveX: x, moveZ: z)
@@ -88,6 +95,23 @@ struct TelluricGameRuntimeView: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
+            Button(model.isDebugOverlayEnabled ? "Debug on" : "Debug") {
+                model.toggleDebugOverlay()
+            }
+            Button("Wire") {
+                model.toggleWireframe()
+            }
+            Button("Bounds") {
+                model.toggleBounds()
+            }
+            Button("Normals") {
+                model.toggleNormals()
+            }
+            Button("Grid") {
+                model.toggleChunkGrid()
+            }
+            Divider()
+                .frame(height: 18)
             Button("Close") {
                 model.setCameraMode(.playableCloseFollow)
             }
