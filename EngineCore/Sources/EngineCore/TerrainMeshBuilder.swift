@@ -27,6 +27,7 @@ public enum TerrainMeshBuilder {
                     coord: terrainSample.coord,
                     worldSeed: samplePayload.worldSeed,
                     generatorVersion: samplePayload.generatorVersion,
+                    profile: samplePayload.profile,
                     horizontalSpacingMeters: horizontalSpacingMeters
                 )
                 let surface = TerrainSurfaceResolver.resolve(sample: terrainSample, normal: normal)
@@ -103,27 +104,32 @@ public enum TerrainMeshBuilder {
         coord: TerrainSampleCoord,
         worldSeed: WorldSeed,
         generatorVersion: TerrainGeneratorVersion,
+        profile: TerrainGenerationProfile,
         horizontalSpacingMeters: Float
     ) -> TEVec3f {
         let left = TerrainScalarField.sample(
             worldSeed: worldSeed,
             coord: TerrainSampleCoord(x: coord.x - 1, z: coord.z),
-            generatorVersion: generatorVersion
+            generatorVersion: generatorVersion,
+            profile: profile
         )
         let right = TerrainScalarField.sample(
             worldSeed: worldSeed,
             coord: TerrainSampleCoord(x: coord.x + 1, z: coord.z),
-            generatorVersion: generatorVersion
+            generatorVersion: generatorVersion,
+            profile: profile
         )
         let south = TerrainScalarField.sample(
             worldSeed: worldSeed,
             coord: TerrainSampleCoord(x: coord.x, z: coord.z - 1),
-            generatorVersion: generatorVersion
+            generatorVersion: generatorVersion,
+            profile: profile
         )
         let north = TerrainScalarField.sample(
             worldSeed: worldSeed,
             coord: TerrainSampleCoord(x: coord.x, z: coord.z + 1),
-            generatorVersion: generatorVersion
+            generatorVersion: generatorVersion,
+            profile: profile
         )
 
         let sampleDistance = horizontalSpacingMeters * 2
@@ -137,4 +143,3 @@ public enum TerrainMeshBuilder {
         return normal
     }
 }
-

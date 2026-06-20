@@ -23,6 +23,7 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         )
 
         XCTAssertEqual(options.colorMode, .surface)
+        XCTAssertEqual(options.renderMode, .debug)
         XCTAssertTrue(options.isWireframeEnabled)
         XCTAssertTrue(options.showsBounds)
         XCTAssertEqual(options.verticalScale, 0.35)
@@ -40,9 +41,25 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         let options = MetalDebugTerrainDisplayOptions.default
 
         XCTAssertEqual(options.verticalScale, 0.25)
+        XCTAssertEqual(options.renderMode, .debug)
         XCTAssertTrue(options.probeMarker.isEnabled)
+        XCTAssertFalse(options.playerMarker.isEnabled)
         XCTAssertGreaterThanOrEqual(options.probeMarker.radius, 3)
         XCTAssertGreaterThanOrEqual(options.probeMarker.height, 12)
+    }
+
+    func testGamePreviewOptionsDisableHeavyDebugOverlaysByDefault() {
+        let options = MetalDebugTerrainDisplayOptions.gamePreview
+
+        XCTAssertEqual(options.renderMode, .gamePreview)
+        XCTAssertEqual(options.colorMode, .surface)
+        XCTAssertFalse(options.isWireframeEnabled)
+        XCTAssertFalse(options.showsBounds)
+        XCTAssertFalse(options.normals.isEnabled)
+        XCTAssertFalse(options.grid.isEnabled)
+        XCTAssertFalse(options.probeMarker.isEnabled)
+        XCTAssertTrue(options.playerMarker.isEnabled)
+        XCTAssertEqual(options.verticalScale, 1)
     }
 
     func testBoundsLineGenerationCountIsStable() {
@@ -83,6 +100,17 @@ final class MetalDebugDisplayOptionsTests: XCTestCase {
         )
 
         XCTAssertTrue(lines.isEmpty)
+    }
+
+    func testPlayerMarkerLineGenerationCountIsStable() {
+        let lines = MetalDebugLineBuilder.makePlayerMarkerLineVertices(
+            point: MetalDebugWorldPoint(x: 1, y: 2, z: 3),
+            configuration: MetalDebugPlayerMarkerConfiguration(isEnabled: true, radius: 2, height: 8)
+        )
+
+        XCTAssertEqual(lines.count, 28)
+        XCTAssertEqual(lines.first?.position, SIMD3<Float>(1, 2.3, 3))
+        XCTAssertEqual(lines.map(\.position.y).max() ?? -1, Float(10))
     }
 
     func testVerticalScaleAffectsProbeMarkerYOnly() {

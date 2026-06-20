@@ -2,17 +2,20 @@ public struct WorldChunkID: Hashable, Codable, Sendable, StableHashable, Compara
     public let worldSeed: WorldSeed
     public let generatorVersion: TerrainGeneratorVersion
     public let layout: TerrainChunkLayout
+    public let profile: TerrainGenerationProfile
     public let coord: WorldChunkCoord
 
     public init(
         worldSeed: WorldSeed,
         generatorVersion: TerrainGeneratorVersion,
         layout: TerrainChunkLayout,
+        profile: TerrainGenerationProfile = .defaultProcedural,
         coord: WorldChunkCoord
     ) {
         self.worldSeed = worldSeed
         self.generatorVersion = generatorVersion
         self.layout = layout
+        self.profile = profile
         self.coord = coord
     }
 
@@ -22,6 +25,7 @@ public struct WorldChunkID: Hashable, Codable, Sendable, StableHashable, Compara
             worldSeed.stableHash,
             generatorVersion.stableHash,
             layout.stableHash,
+            profile.stableHash,
             coord.stableHash
         )
     }
@@ -36,7 +40,9 @@ public struct WorldChunkID: Hashable, Codable, Sendable, StableHashable, Compara
         if lhs.generatorVersion.stableHash != rhs.generatorVersion.stableHash {
             return lhs.generatorVersion.stableHash < rhs.generatorVersion.stableHash
         }
-        return lhs.layout.stableHash < rhs.layout.stableHash
+        if lhs.layout.stableHash != rhs.layout.stableHash {
+            return lhs.layout.stableHash < rhs.layout.stableHash
+        }
+        return lhs.profile.stableHash < rhs.profile.stableHash
     }
 }
-

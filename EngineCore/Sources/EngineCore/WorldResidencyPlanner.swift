@@ -47,6 +47,7 @@ public struct WorldResidencyPlanner: Sendable {
                     worldSeed: request.worldSeed,
                     generatorVersion: request.generatorVersion,
                     layout: request.layout,
+                    profile: request.profile,
                     coord: coord
                 )
 
@@ -152,4 +153,3 @@ public struct WorldResidencyPlanner: Sendable {
         return lhs.chunkCoord < rhs.chunkCoord
     }
 }
-

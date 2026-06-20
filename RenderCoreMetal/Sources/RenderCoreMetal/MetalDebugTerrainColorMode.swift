@@ -40,8 +40,17 @@ public extension MetalTerrainMeshUploader {
         surface: TerrainSurfaceSample,
         lifecycleState: ChunkLifecycleState,
         colorMode: MetalDebugTerrainColorMode,
+        renderMode: MetalTerrainRenderMode = .debug,
         isSelected: Bool = false
     ) -> SIMD4<Float> {
+        if renderMode == .gamePreview {
+            return gamePreviewColor(
+                heightMeters: heightMeters,
+                surface: surface,
+                isSelected: isSelected
+            )
+        }
+
         let height01 = normalizedHeight(heightMeters)
         let baseColor: SIMD3<Float>
 
@@ -69,6 +78,31 @@ public extension MetalTerrainMeshUploader {
             min(selectedColor.x * brightness, 1),
             min(selectedColor.y * brightness, 1),
             min(selectedColor.z * brightness, 1),
+            1
+        )
+    }
+
+    private static func gamePreviewColor(
+        heightMeters: Float,
+        surface: TerrainSurfaceSample,
+        isSelected: Bool
+    ) -> SIMD4<Float> {
+        let height01 = max(0, min(1, (heightMeters + 12) / 24))
+        let base = color(for: surface.material)
+        let warmGrass = mix(base, SIMD3<Float>(0.30, 0.62, 0.28), amount: surface.material == .grass ? 0.45 : 0.18)
+        let shaded = mix(
+            warmGrass,
+            SIMD3<Float>(0.82, 0.78, 0.62),
+            amount: height01 * 0.20
+        )
+        let selected = isSelected
+            ? mix(shaded, SIMD3<Float>(1.0, 0.92, 0.22), amount: 0.38)
+            : shaded
+
+        return SIMD4<Float>(
+            min(max(selected.x, 0), 1),
+            min(max(selected.y, 0), 1),
+            min(max(selected.z, 0), 1),
             1
         )
     }

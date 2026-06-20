@@ -10,6 +10,7 @@ struct TelluricMetalViewRepresentable: NSViewRepresentable {
     let cameraState: MetalDebugCameraState
     let pickedPoint: MetalDebugWorldPoint?
     let probePoint: MetalDebugWorldPoint?
+    let playerPoint: MetalDebugWorldPoint?
     let isViewportPickingEnabled: Bool
     let statsTick: Date
     @Binding var renderErrorMessage: String?
@@ -37,6 +38,7 @@ struct TelluricMetalViewRepresentable: NSViewRepresentable {
             cameraState: cameraState,
             pickedPoint: pickedPoint,
             probePoint: probePoint,
+            playerPoint: playerPoint,
             isViewportPickingEnabled: isViewportPickingEnabled,
             renderErrorMessage: $renderErrorMessage,
             frameStats: $frameStats,

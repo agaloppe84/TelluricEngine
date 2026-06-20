@@ -124,7 +124,8 @@ public struct ChunkBuildPipeline: Sendable {
             worldSeed: target.chunkID.worldSeed,
             chunkCoord: target.chunkCoord.chunkCoord,
             generatorVersion: target.chunkID.generatorVersion,
-            layout: target.chunkID.layout
+            layout: target.chunkID.layout,
+            profile: target.chunkID.profile
         )
     }
 

@@ -52,6 +52,7 @@ final class TelluricMetalDebugCoordinator {
         cameraState: MetalDebugCameraState,
         pickedPoint: MetalDebugWorldPoint?,
         probePoint: MetalDebugWorldPoint?,
+        playerPoint: MetalDebugWorldPoint?,
         isViewportPickingEnabled: Bool,
         renderErrorMessage: Binding<String?>,
         frameStats: Binding<MetalDebugFrameStats>,
@@ -86,7 +87,8 @@ final class TelluricMetalDebugCoordinator {
                     meshDescriptors,
                     displayOptions: displayOptions,
                     pickedPoint: pickedPoint,
-                    probePoint: probePoint
+                    probePoint: probePoint,
+                    playerPoint: playerPoint
                 )
                 lastUploadHash = uploadHash
             }

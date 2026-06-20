@@ -63,6 +63,7 @@ public struct MetalTerrainMeshUploader {
                     surface: vertex.surface,
                     lifecycleState: descriptor.lifecycleState,
                     colorMode: descriptor.colorMode,
+                    renderMode: descriptor.renderMode,
                     isSelected: descriptor.isSelected
                 )
             )
@@ -78,7 +79,8 @@ public struct MetalTerrainMeshUploader {
             heightMeters: heightMeters,
             surface: surface,
             lifecycleState: lifecycleState,
-            colorMode: .mixed
+            colorMode: .mixed,
+            renderMode: .debug
         )
     }
 

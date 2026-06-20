@@ -99,6 +99,7 @@ struct TelluricRuntimeAppTests {
         #expect(RenderCoreMetalInfo.phase8Status == "terrain-debug-picking-refinement")
         #expect(RenderCoreMetalInfo.phase9Status == "terrain-query-player-probe-debug-marker")
         #expect(RenderCoreMetalInfo.phase9_5Status == "debug-runtime-usability-fix")
+        #expect(RenderCoreMetalInfo.phase9_6Status == "playable-runtime-slice-debug-separation")
     }
 
     @Test func renderCoreMetalCPUConversionMatchesDebugMeshPayload() throws {
@@ -378,6 +379,89 @@ struct TelluricRuntimeAppTests {
         let orbited = model.debugCameraState
         model.panDebugCameraFromDrag(deltaX: 8, deltaY: 4)
         #expect(model.debugCameraState.target != orbited.target)
+    }
+
+    @Test func defaultRuntimeModeIsGameAndDebugRemainsAvailable() {
+        #expect(TelluricRuntimeMode.defaultMode == .game)
+        #expect(TelluricRuntimeMode.allCases.contains(.debug))
+    }
+
+    @Test func gameModelBuildsInitialPlayableSnapshot() {
+        let model = TelluricGameRuntimeModel()
+
+        #expect(model.profile == .debugPlayable)
+        #expect(model.snapshot != nil)
+        #expect(model.meshCount > 0)
+        #expect(model.displayOptions.renderMode == .gamePreview)
+        #expect(model.displayOptions.playerMarker.isEnabled)
+        #expect(model.displayOptions.showsBounds == false)
+        #expect(model.displayOptions.normals.isEnabled == false)
+    }
+
+    @Test func gamePlayerStartsGroundedAndWalkable() {
+        let model = TelluricGameRuntimeModel()
+
+        #expect(model.isGrounded)
+        #expect(model.playerWalkability.isWalkable)
+        #expect(model.playerPosition.y.isFinite)
+        #expect(model.walkabilityLabel.isEmpty == false)
+    }
+
+    @Test func movingGamePlayerChangesXZAndUpdatesTerrainHeight() {
+        let model = TelluricGameRuntimeModel()
+        let initial = model.playerPosition
+
+        model.movePlayer(deltaX: model.playerStepMeters, deltaZ: 0, source: .keyboard)
+
+        #expect(model.playerPosition.x != initial.x)
+        #expect(model.playerPosition.z == initial.z)
+        #expect(model.playerPosition.y.isFinite)
+        #expect(model.isGrounded)
+        #expect(model.lastInputSource == .keyboard)
+    }
+
+    @Test func crossingChunkBoundaryUpdatesGameCenterAndSnapshot() {
+        let model = TelluricGameRuntimeModel()
+        let initialCenter = model.centerChunkCoord
+        let initialHash = model.snapshot?.stableHash
+        let distance = Float(model.layout.chunkSampleSpan) + 2
+
+        model.movePlayer(deltaX: distance, deltaZ: 0, source: .keyboard)
+
+        #expect(model.centerChunkCoord != initialCenter)
+        #expect(model.playerChunkCoord == model.centerChunkCoord)
+        #expect(model.snapshot?.stableHash != initialHash)
+        #expect(model.meshCount > 0)
+    }
+
+    @Test func gameKeyboardInputStateMutatesMovementIntent() {
+        let model = TelluricGameRuntimeModel()
+        let initial = model.playerPosition
+        let input = TelluricGameInputState(moveX: 0, moveZ: 1, source: .keyboard)
+
+        #expect(input.hasMovement)
+        model.applyKeyboardInput(input)
+
+        #expect(model.playerPosition.z > initial.z)
+        #expect(model.lastInputSource == .keyboard)
+    }
+
+    @Test func gameControllerInputLayerInitializesSafely() {
+        let controllerInput = TelluricGameControllerInput()
+
+        #expect(controllerInput.statusLabel.isEmpty == false)
+    }
+
+    @Test func gameHUDStatsAreNonEmpty() {
+        let model = TelluricGameRuntimeModel()
+
+        #expect(model.playerPositionLabel.isEmpty == false)
+        #expect(model.centerChunkLabel.isEmpty == false)
+        #expect(model.playerChunkLabel.isEmpty == false)
+        #expect(model.walkabilityLabel.isEmpty == false)
+        #expect(model.meshCount > 0)
+        #expect(model.residentChunkCount > 0)
+        #expect(model.activeChunkCount > 0)
     }
 
     private func makePickingResult(model: TelluricDebugRuntimeModel) throws -> MetalDebugPickingResult {

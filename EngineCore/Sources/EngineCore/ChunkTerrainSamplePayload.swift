@@ -2,6 +2,7 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
     public let worldSeed: WorldSeed
     public let chunkCoord: ChunkCoord
     public let generatorVersion: TerrainGeneratorVersion
+    public let profile: TerrainGenerationProfile
     public let layout: TerrainChunkLayout
     public let samples: [TerrainSample]
     public let payloadHash: UInt64
@@ -10,6 +11,7 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
         worldSeed: WorldSeed,
         chunkCoord: ChunkCoord,
         generatorVersion: TerrainGeneratorVersion,
+        profile: TerrainGenerationProfile = .defaultProcedural,
         layout: TerrainChunkLayout,
         samples: [TerrainSample]
     ) {
@@ -18,12 +20,14 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
         self.worldSeed = worldSeed
         self.chunkCoord = chunkCoord
         self.generatorVersion = generatorVersion
+        self.profile = profile
         self.layout = layout
         self.samples = samples
         self.payloadHash = Self.computePayloadHash(
             worldSeed: worldSeed,
             chunkCoord: chunkCoord,
             generatorVersion: generatorVersion,
+            profile: profile,
             layout: layout,
             samples: samples
         )
@@ -44,6 +48,7 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
         worldSeed: WorldSeed,
         chunkCoord: ChunkCoord,
         generatorVersion: TerrainGeneratorVersion,
+        profile: TerrainGenerationProfile,
         layout: TerrainChunkLayout,
         samples: [TerrainSample]
     ) -> UInt64 {
@@ -55,6 +60,10 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
             layout.stableHash
         )
 
+        if profile != .defaultProcedural {
+            state = StableHasher.combine(state, profile.stableHash)
+        }
+
         for sample in samples {
             state = StableHasher.combine(state, sample.stableHash)
         }
@@ -62,4 +71,3 @@ public struct ChunkTerrainSamplePayload: Hashable, Codable, Sendable, StableHash
         return StableHasher.mix(state ^ UInt64(samples.count))
     }
 }
-

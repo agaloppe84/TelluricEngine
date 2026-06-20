@@ -215,6 +215,60 @@ public enum MetalDebugLineBuilder {
         }
     }
 
+    public static func makePlayerMarkerLineVertices(
+        point: MetalDebugWorldPoint?,
+        configuration: MetalDebugPlayerMarkerConfiguration,
+        verticalScale: Float = 1
+    ) -> [MetalDebugLineVertex] {
+        guard configuration.isEnabled, let point else {
+            return []
+        }
+
+        let center = scaledPosition(point.position, verticalScale: verticalScale)
+        let radius = configuration.radius
+        let height = configuration.height
+        let color = configuration.color
+        let baseY = center.y + radius * 0.15
+        let shoulderY = center.y + height * 0.62
+        let headY = center.y + height
+
+        let base = SIMD3<Float>(center.x, baseY, center.z)
+        let head = SIMD3<Float>(center.x, headY, center.z)
+        let eastBase = SIMD3<Float>(center.x + radius, baseY, center.z)
+        let westBase = SIMD3<Float>(center.x - radius, baseY, center.z)
+        let northBase = SIMD3<Float>(center.x, baseY, center.z + radius)
+        let southBase = SIMD3<Float>(center.x, baseY, center.z - radius)
+        let eastShoulder = SIMD3<Float>(center.x + radius * 0.75, shoulderY, center.z)
+        let westShoulder = SIMD3<Float>(center.x - radius * 0.75, shoulderY, center.z)
+        let northShoulder = SIMD3<Float>(center.x, shoulderY, center.z + radius * 0.75)
+        let southShoulder = SIMD3<Float>(center.x, shoulderY, center.z - radius * 0.75)
+        let headingEnd = SIMD3<Float>(center.x, shoulderY, center.z + radius * 1.8)
+
+        let endpoints = [
+            (base, head),
+            (eastBase, eastShoulder),
+            (westBase, westShoulder),
+            (northBase, northShoulder),
+            (southBase, southShoulder),
+            (eastBase, northBase),
+            (northBase, westBase),
+            (westBase, southBase),
+            (southBase, eastBase),
+            (eastShoulder, head),
+            (northShoulder, head),
+            (westShoulder, head),
+            (southShoulder, head),
+            (base, headingEnd)
+        ]
+
+        return endpoints.flatMap { start, end in
+            [
+                MetalDebugLineVertex(position: start, color: color),
+                MetalDebugLineVertex(position: end, color: color)
+            ]
+        }
+    }
+
     private static func stableUniqueFloats(_ values: [Float]) -> [Float] {
         var seen = Set<UInt32>()
         return values

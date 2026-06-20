@@ -23,6 +23,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
     private var gridLineBuffers: MetalDebugLineBuffers?
     private var pickedPointLineBuffers: MetalDebugLineBuffers?
     private var probePointLineBuffers: MetalDebugLineBuffers?
+    private var playerPointLineBuffers: MetalDebugLineBuffers?
     private var frameStats = MetalDebugFrameStats.zero
     private var frameIndex: UInt64 = 0
     private var lastFrameTimestamp: CFTimeInterval?
@@ -110,7 +111,9 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         try updateMeshes(
             descriptors,
             displayOptions: displayOptions,
-            pickedPoint: nil
+            pickedPoint: nil,
+            probePoint: nil,
+            playerPoint: nil
         )
     }
 
@@ -123,7 +126,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
             descriptors,
             displayOptions: displayOptions,
             pickedPoint: pickedPoint,
-            probePoint: nil
+            probePoint: nil,
+            playerPoint: nil
         )
     }
 
@@ -131,7 +135,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         _ descriptors: [MetalTerrainMeshDescriptor],
         displayOptions: MetalDebugTerrainDisplayOptions,
         pickedPoint: MetalDebugWorldPoint?,
-        probePoint: MetalDebugWorldPoint?
+        probePoint: MetalDebugWorldPoint?,
+        playerPoint: MetalDebugWorldPoint? = nil
     ) throws {
         let effectiveDescriptors = descriptors.map { descriptor in
             MetalTerrainMeshDescriptor(
@@ -140,6 +145,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 lifecycleState: descriptor.lifecycleState,
                 payloadState: descriptor.payloadState,
                 colorMode: displayOptions.colorMode,
+                renderMode: displayOptions.renderMode,
                 isSelected: descriptor.isSelected,
                 debugName: descriptor.debugName
             )
@@ -199,6 +205,16 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 debugName: "telluric-debug-probe-point-lines"
             )
             : nil
+        playerPointLineBuffers = displayOptions.playerMarker.isEnabled
+            ? try makeLineBuffers(
+                vertices: MetalDebugLineBuilder.makePlayerMarkerLineVertices(
+                    point: playerPoint,
+                    configuration: displayOptions.playerMarker,
+                    verticalScale: displayOptions.verticalScale
+                ),
+                debugName: "telluric-game-player-marker-lines"
+            )
+            : nil
     }
 
     public func updateCamera(_ state: MetalDebugCameraState) {
@@ -213,6 +229,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         gridLineBuffers = nil
         pickedPointLineBuffers = nil
         probePointLineBuffers = nil
+        playerPointLineBuffers = nil
         frameStats = MetalDebugFrameStats.zero
         currentFrameStats = .zero
     }
@@ -263,6 +280,7 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
         drawLineBuffers(gridLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(pickedPointLineBuffers, encoder: encoder, uniforms: &uniforms)
         drawLineBuffers(probePointLineBuffers, encoder: encoder, uniforms: &uniforms)
+        drawLineBuffers(playerPointLineBuffers, encoder: encoder, uniforms: &uniforms)
 
         encoder.endEncoding()
         commandBuffer.present(drawable)
@@ -396,7 +414,8 @@ public final class MetalDebugRenderer: NSObject, MTKViewDelegate {
                 + (normalLineBuffers?.vertexCount ?? 0)
                 + (gridLineBuffers?.vertexCount ?? 0)
                 + (pickedPointLineBuffers?.vertexCount ?? 0)
-                + (probePointLineBuffers?.vertexCount ?? 0),
+                + (probePointLineBuffers?.vertexCount ?? 0)
+                + (playerPointLineBuffers?.vertexCount ?? 0),
             frameIndex: frameIndex
         )
         currentFrameStats = frameStats

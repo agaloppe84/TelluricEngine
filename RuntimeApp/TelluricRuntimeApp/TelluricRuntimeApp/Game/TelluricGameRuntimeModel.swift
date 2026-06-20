@@ -1,0 +1,369 @@
+import Combine
+import EngineCore
+import RenderCoreMetal
+import SwiftUI
+
+@MainActor
+final class TelluricGameRuntimeModel: ObservableObject {
+    @Published private(set) var playerPosition: TerrainWorldPosition
+    @Published private(set) var playerWalkability: TerrainWalkability
+    @Published private(set) var isGrounded: Bool
+    @Published private(set) var centerChunkCoord: WorldChunkCoord
+    @Published private(set) var playerChunkCoord: WorldChunkCoord
+    @Published private(set) var snapshot: ResidentWorldSnapshot?
+    @Published private(set) var lastPlan: WorldResidencyPlan?
+    @Published private(set) var lastBuildResult: ChunkBuildResult?
+    @Published private(set) var cameraState: MetalDebugCameraState
+    @Published private(set) var cameraMode: TelluricGameCameraMode
+    @Published private(set) var lastInputSource: TelluricGameInputSource
+    @Published private(set) var errorMessage: String?
+
+    let seed: UInt64
+    let generatorVersion: TerrainGeneratorVersion
+    let layout: TerrainChunkLayout
+    let profile: TerrainGenerationProfile
+    let config: WorldResidencyConfig
+    let playerStepMeters: Float
+
+    private let planner = WorldResidencyPlanner()
+    private let pipeline = ChunkBuildPipeline()
+    private let cameraController = MetalDebugCameraController()
+    private var cache = InMemoryWorldCache()
+
+    init(
+        seed: UInt64 = 20_260_696,
+        generatorVersion: TerrainGeneratorVersion = .phase1,
+        layout: TerrainChunkLayout = TerrainChunkLayout(samplesPerAxis: 17),
+        profile: TerrainGenerationProfile = .debugPlayable,
+        config: WorldResidencyConfig = WorldResidencyConfig(
+            activeRadiusChunks: 0,
+            residentRadiusChunks: 1,
+            meshRadiusChunks: 2,
+            sampleRadiusChunks: 3,
+            evictionRadiusChunks: 4
+        ),
+        startX: Float = 8,
+        startZ: Float = 8,
+        playerStepMeters: Float = 1.5
+    ) {
+        self.seed = seed
+        self.generatorVersion = generatorVersion
+        self.layout = layout
+        self.profile = profile
+        self.config = config
+        self.playerStepMeters = playerStepMeters
+        self.playerPosition = TerrainWorldPosition(x: startX, y: 0, z: startZ)
+        self.playerWalkability = .unknown
+        self.isGrounded = false
+        let chunkCoord = Self.chunkCoord(forWorldX: startX, worldZ: startZ, layout: layout)
+        self.centerChunkCoord = chunkCoord
+        self.playerChunkCoord = chunkCoord
+        self.cameraMode = .followIso
+        self.lastInputSource = .none
+        self.cameraState = Self.makeCameraState(
+            mode: .followIso,
+            playerPosition: TerrainWorldPosition(x: startX, y: 0, z: startZ),
+            orthographicScale: 72
+        )
+
+        rebuildWorldAroundPlayer()
+        snapPlayerToTerrain(worldX: startX, worldZ: startZ)
+        updateCameraForPlayer()
+    }
+
+    var displayOptions: MetalDebugTerrainDisplayOptions {
+        .gamePreview
+    }
+
+    var meshDescriptors: [MetalTerrainMeshDescriptor] {
+        (snapshot?.records ?? []).compactMap { record in
+            guard let meshPayload = record.meshPayload else {
+                return nil
+            }
+
+            return MetalTerrainMeshDescriptor(
+                meshPayload: meshPayload,
+                chunkID: record.chunkID,
+                lifecycleState: record.lifecycleState,
+                payloadState: record.payloadState,
+                colorMode: .surface,
+                renderMode: .gamePreview,
+                isSelected: record.chunkCoord == playerChunkCoord,
+                debugName: "game-chunk-\(record.chunkCoord.x)-\(record.chunkCoord.z)"
+            )
+        }
+    }
+
+    var uploadHash: UInt64 {
+        var state = StableHasher.hash(seed: 0x7E11_571C_9A6A_0001, displayOptions.stableDebugID)
+        for descriptor in meshDescriptors {
+            state = StableHasher.combine(state, descriptor.meshPayload.stableHash)
+            state = StableHasher.combine(state, descriptor.lifecycleState.stableHash)
+            state = StableHasher.combine(state, descriptor.isSelected ? 1 : 0)
+        }
+        state = StableHasher.combine(state, playerPosition.stableHash)
+        return StableHasher.combine(state, UInt64(meshDescriptors.count))
+    }
+
+    var playerPoint: MetalDebugWorldPoint {
+        MetalDebugWorldPoint(
+            x: playerPosition.x,
+            y: playerPosition.y,
+            z: playerPosition.z
+        )
+    }
+
+    var meshCount: Int {
+        meshDescriptors.count
+    }
+
+    var residentChunkCount: Int {
+        snapshot?.stats.residentRecords ?? 0
+    }
+
+    var activeChunkCount: Int {
+        snapshot?.stats.activeRecords ?? 0
+    }
+
+    var playerPositionLabel: String {
+        String(
+            format: "%.2f, %.2f, %.2f",
+            Double(playerPosition.x),
+            Double(playerPosition.y),
+            Double(playerPosition.z)
+        )
+    }
+
+    var centerChunkLabel: String {
+        "(\(centerChunkCoord.x), \(centerChunkCoord.z))"
+    }
+
+    var playerChunkLabel: String {
+        "(\(playerChunkCoord.x), \(playerChunkCoord.z))"
+    }
+
+    var walkabilityLabel: String {
+        if isGrounded == false {
+            return "outside"
+        }
+        return playerWalkability.isWalkable ? "walkable" : "\(playerWalkability.reason)"
+    }
+
+    func applyKeyboardInput(_ input: TelluricGameInputState) {
+        guard input.hasMovement else {
+            lastInputSource = .keyboard
+            return
+        }
+        movePlayer(input: input)
+    }
+
+    func applyControllerInput(moveX: Float, moveZ: Float) {
+        let input = TelluricGameInputState(
+            moveX: moveX,
+            moveZ: moveZ,
+            source: .controller
+        )
+        guard input.hasMovement else {
+            return
+        }
+        movePlayer(input: input)
+    }
+
+    func resetPlayer() {
+        let startX = Float(Int(centerChunkCoord.x) * layout.chunkSampleSpan) + Float(layout.chunkSampleSpan) * 0.5
+        let startZ = Float(Int(centerChunkCoord.z) * layout.chunkSampleSpan) + Float(layout.chunkSampleSpan) * 0.5
+        snapPlayerToTerrain(worldX: startX, worldZ: startZ)
+        updateCenterIfNeeded()
+        updateCameraForPlayer()
+    }
+
+    func resetCamera() {
+        cameraMode = .followIso
+        updateCameraForPlayer()
+    }
+
+    func setCameraMode(_ mode: TelluricGameCameraMode) {
+        cameraMode = mode
+        updateCameraForPlayer()
+    }
+
+    func zoomCameraIn() {
+        cameraMode = .freeOrbit
+        cameraState = cameraController.zoom(cameraState, delta: -0.15)
+    }
+
+    func zoomCameraOut() {
+        cameraMode = .freeOrbit
+        cameraState = cameraController.zoom(cameraState, delta: 0.18)
+    }
+
+    func rotateCameraLeft() {
+        cameraMode = .freeOrbit
+        cameraState = cameraController.orbit(cameraState, deltaYaw: -0.16, deltaPitch: 0)
+    }
+
+    func rotateCameraRight() {
+        cameraMode = .freeOrbit
+        cameraState = cameraController.orbit(cameraState, deltaYaw: 0.16, deltaPitch: 0)
+    }
+
+    private func movePlayer(input: TelluricGameInputState) {
+        let length = max(0.0001, (input.moveX * input.moveX + input.moveZ * input.moveZ).squareRoot())
+        let dx = input.moveX / length * playerStepMeters
+        let dz = input.moveZ / length * playerStepMeters
+        movePlayer(deltaX: dx, deltaZ: dz, source: input.source)
+    }
+
+    func movePlayer(deltaX: Float, deltaZ: Float, source: TelluricGameInputSource) {
+        let targetX = playerPosition.x + deltaX
+        let targetZ = playerPosition.z + deltaZ
+        let targetChunk = Self.chunkCoord(forWorldX: targetX, worldZ: targetZ, layout: layout)
+        if targetChunk != centerChunkCoord {
+            centerChunkCoord = targetChunk
+            rebuildWorldAroundPlayer()
+        }
+
+        snapPlayerToTerrain(worldX: targetX, worldZ: targetZ)
+        lastInputSource = source
+        updateCenterIfNeeded()
+        updateCameraForPlayer()
+    }
+
+    private func snapPlayerToTerrain(worldX: Float, worldZ: Float) {
+        guard let terrain = makeTerrainQueryEngine() else {
+            playerPosition = TerrainWorldPosition(x: worldX, y: playerPosition.y, z: worldZ)
+            playerWalkability = .unknown
+            isGrounded = false
+            return
+        }
+
+        let result = terrain.query(TerrainQueryRequest(worldX: worldX, worldZ: worldZ))
+        playerPosition = result.worldPosition
+        playerWalkability = result.walkability
+        isGrounded = result.isInsideKnownTerrain
+        playerChunkCoord = Self.chunkCoord(forWorldX: worldX, worldZ: worldZ, layout: layout)
+    }
+
+    private func updateCenterIfNeeded() {
+        let nextCenter = Self.chunkCoord(forWorldX: playerPosition.x, worldZ: playerPosition.z, layout: layout)
+        guard nextCenter != centerChunkCoord else {
+            return
+        }
+        centerChunkCoord = nextCenter
+        rebuildWorldAroundPlayer()
+    }
+
+    private func rebuildWorldAroundPlayer() {
+        do {
+            let request = WorldResidencyRequest(
+                worldSeed: WorldSeed(seed),
+                generatorVersion: generatorVersion,
+                centerWorldPosition: TEVec3f(
+                    x: playerPosition.x,
+                    y: playerPosition.y,
+                    z: playerPosition.z
+                ),
+                centerChunkCoord: centerChunkCoord,
+                layout: layout,
+                profile: profile,
+                config: config
+            )
+            let plan = try planner.makePlan(request)
+            let result = try pipeline.apply(plan: plan, cache: &cache)
+            lastPlan = plan
+            lastBuildResult = result
+            snapshot = result.snapshot
+            errorMessage = nil
+        } catch {
+            errorMessage = String(describing: error)
+        }
+    }
+
+    private func makeTerrainQueryEngine() -> TerrainQueryEngine? {
+        guard let snapshot else {
+            return nil
+        }
+        return TerrainQueryEngine(snapshot: snapshot)
+    }
+
+    private func updateCameraForPlayer() {
+        let scale = cameraState.orthographicScale.isFinite ? cameraState.orthographicScale : 72
+        cameraState = Self.makeCameraState(
+            mode: cameraMode,
+            playerPosition: playerPosition,
+            orthographicScale: scale
+        )
+    }
+
+    private static func makeCameraState(
+        mode: TelluricGameCameraMode,
+        playerPosition: TerrainWorldPosition,
+        orthographicScale: Float
+    ) -> MetalDebugCameraState {
+        let target = SIMD3<Float>(
+            playerPosition.x,
+            playerPosition.y,
+            playerPosition.z
+        )
+        let scale = max(36, min(orthographicScale, 220))
+
+        switch mode {
+        case .followIso:
+            return MetalDebugCameraState(
+                target: target,
+                distance: max(scale * 1.8, 110),
+                yawRadians: Float.pi * 0.25,
+                pitchRadians: 0.62,
+                zoomScale: 1,
+                orthographicScale: scale,
+                nearZ: 0.1,
+                farZ: max(scale * 10, 2_000)
+            )
+        case .topDown:
+            return MetalDebugCameraState(
+                target: target,
+                distance: max(scale * 1.7, 110),
+                yawRadians: 0,
+                pitchRadians: 1.28,
+                zoomScale: 1,
+                orthographicScale: scale,
+                nearZ: 0.1,
+                farZ: max(scale * 10, 2_000)
+            )
+        case .freeOrbit:
+            return MetalDebugCameraState(
+                target: target,
+                distance: max(scale * 1.8, 110),
+                yawRadians: Float.pi * 0.25,
+                pitchRadians: 0.62,
+                zoomScale: 1,
+                orthographicScale: scale,
+                nearZ: 0.1,
+                farZ: max(scale * 10, 2_000)
+            )
+        }
+    }
+
+    private static func chunkCoord(
+        forWorldX worldX: Float,
+        worldZ: Float,
+        layout: TerrainChunkLayout
+    ) -> WorldChunkCoord {
+        let span = Int64(layout.chunkSampleSpan)
+        let sampleX = Int64(floor(Double(worldX)))
+        let sampleZ = Int64(floor(Double(worldZ)))
+        return WorldChunkCoord(
+            x: Int32(clamping: floorDiv(sampleX, span)),
+            z: Int32(clamping: floorDiv(sampleZ, span))
+        )
+    }
+
+    private static func floorDiv(_ value: Int64, _ divisor: Int64) -> Int64 {
+        var quotient = value / divisor
+        let remainder = value % divisor
+        if remainder < 0 {
+            quotient -= 1
+        }
+        return quotient
+    }
+}

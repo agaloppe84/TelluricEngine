@@ -3,7 +3,8 @@ public enum TerrainChunkSampler {
         worldSeed: WorldSeed,
         chunkCoord: ChunkCoord,
         generatorVersion: TerrainGeneratorVersion = .phase1,
-        layout: TerrainChunkLayout = .phase1Default
+        layout: TerrainChunkLayout = .phase1Default,
+        profile: TerrainGenerationProfile = .defaultProcedural
     ) -> ChunkTerrainSamplePayload {
         var samples: [TerrainSample] = []
         samples.reserveCapacity(layout.sampleCount)
@@ -19,7 +20,8 @@ public enum TerrainChunkSampler {
                     TerrainScalarField.sample(
                         worldSeed: worldSeed,
                         coord: coord,
-                        generatorVersion: generatorVersion
+                        generatorVersion: generatorVersion,
+                        profile: profile
                     )
                 )
             }
@@ -29,9 +31,9 @@ public enum TerrainChunkSampler {
             worldSeed: worldSeed,
             chunkCoord: chunkCoord,
             generatorVersion: generatorVersion,
+            profile: profile,
             layout: layout,
             samples: samples
         )
     }
 }
-

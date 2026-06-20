@@ -10,5 +10,6 @@ final class RenderCoreMetalInfoTests: XCTestCase {
         XCTAssertEqual(RenderCoreMetalInfo.phase8Status, "terrain-debug-picking-refinement")
         XCTAssertEqual(RenderCoreMetalInfo.phase9Status, "terrain-query-player-probe-debug-marker")
         XCTAssertEqual(RenderCoreMetalInfo.phase9_5Status, "debug-runtime-usability-fix")
+        XCTAssertEqual(RenderCoreMetalInfo.phase9_6Status, "playable-runtime-slice-debug-separation")
     }
 }

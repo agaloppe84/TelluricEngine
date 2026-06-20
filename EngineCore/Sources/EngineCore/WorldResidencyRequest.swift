@@ -4,6 +4,7 @@ public struct WorldResidencyRequest: Hashable, Codable, Sendable, StableHashable
     public let centerWorldPosition: TEVec3f
     public let centerChunkCoord: WorldChunkCoord
     public let layout: TerrainChunkLayout
+    public let profile: TerrainGenerationProfile
     public let config: WorldResidencyConfig
     public let cameraForward: TEVec3f?
     public let playerVelocity: TEVec3f?
@@ -14,6 +15,7 @@ public struct WorldResidencyRequest: Hashable, Codable, Sendable, StableHashable
         centerWorldPosition: TEVec3f,
         centerChunkCoord: WorldChunkCoord,
         layout: TerrainChunkLayout = .phase1Default,
+        profile: TerrainGenerationProfile = .defaultProcedural,
         config: WorldResidencyConfig,
         cameraForward: TEVec3f? = nil,
         playerVelocity: TEVec3f? = nil
@@ -23,6 +25,7 @@ public struct WorldResidencyRequest: Hashable, Codable, Sendable, StableHashable
         self.centerWorldPosition = centerWorldPosition
         self.centerChunkCoord = centerChunkCoord
         self.layout = layout
+        self.profile = profile
         self.config = config
         self.cameraForward = cameraForward
         self.playerVelocity = playerVelocity
@@ -36,6 +39,7 @@ public struct WorldResidencyRequest: Hashable, Codable, Sendable, StableHashable
             centerWorldPosition.stableHash,
             centerChunkCoord.stableHash,
             layout.stableHash,
+            profile.stableHash,
             config.stableHash,
             optionalHash(cameraForward),
             cameraForward == nil ? 0 : 1,
@@ -48,4 +52,3 @@ public struct WorldResidencyRequest: Hashable, Codable, Sendable, StableHashable
         value?.stableHash ?? 0
     }
 }
-
